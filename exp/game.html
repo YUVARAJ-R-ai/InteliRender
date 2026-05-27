@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conway's Game of Life</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 20px;
+  }
+  
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(60, 15px);
+    gap: 1px;
+    width: 900px;
+  }
+
+  .cell {
+    width: 15px;
+    height: 15px;
+    background-color: #333;
+  }
+  
+  .alive { background-color: brightcyan; }
+  .dying { background-color: orange; }
+</style>
+</head>
+<body>
+
+<div id="grid"></div>
+<button onclick="randomize()">Randomize</button>
+<button onclick="playPause()">Play/Pause</button>
+<button onclick="step()">Step</button>
+<div>Generation: <span id="generation">0</span></div>
+
+<script>
+  const grid = document.getElementById('grid');
+  let cells = [];
+  let interval;
+  let isPlaying = false;
+  let generation = 0;
+
+  function createGrid() {
+    for (let i = 0; i < 60 * 40; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      grid.appendChild(cell);
+      cells.push(cell);
+    }
+  }
+
+  function randomize() {
+    clearInterval(interval);
+    isPlaying = false;
+    generation = 0;
+    document.getElementById('generation').innerText = generation;
+
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i];
+      cell.classList.remove('alive');
+      cell.classList.remove('dying');
+
+      if (Math.random() > 0.75) { // Randomize with a 25% chance
+        cell.classList.add('alive');
+      }
+    }
+  }
+
+  function step() {
+    updateGrid();
+    generation++;
+    document.getElementById('generation').innerText = generation;
+  }
+
+  function playPause() {
+    if (isPlaying) {
+      clearInterval(interval);
+    } else {
+      interval = setInterval(updateGrid, 100); // Adjust delay for smoother animation
+    }
+    isPlaying = !isPlaying;
+  }
+
+  function updateGrid() {
+    const newCells = [...cells];
+
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i];
+      let aliveNeighbors = countAliveNeighbors(i);
+
+      if (cell.classList.contains('alive')) {
+        if (aliveNeighbors < 2 || aliveNeighbors > 3) {
+          newCells[i].classList.add('dying');
+          newCells[i].classList.remove('alive');
+        } else {
+          newCells[i].classList.remove('dying');
+        }
+      } else {
+        if (aliveNeighbors === 3) {
+          newCells[i].classList.add('alive');
+        } else {
+          newCells[i].classList.remove('dying');
+        }
+      }
+    }
+
+    cells = newCells;
+    renderGrid();
+  }
+
+  function countAliveNeighbors(index) {
+    const row = Math.floor(index / 60);
+    const col = index % 60;
+
+    let count = 0;
+    for (let i = -1; i <= 1; i++) {
+      for (let j = -1; j <= 1; j++) {
+        if (i === 0 && j === 0) continue;
+        
+        const newRow = row + i;
+        const newCol = col + j;
+
+        if (newRow >= 0 && newRow < 40 && newCol >= 0 && newCol < 60) {
+          const newIndex = newRow * 60 + newCol;
+          if (cells[newIndex].classList.contains('alive')) {
+            count++;
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
+  function renderGrid() {
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i];
+      if (cell.classList.contains('dying')) {
+        setTimeout(() => {
+          cell.classList.remove('dying');
+          if (cell.classList.contains('alive')) {
+            cell.classList.add('alive');
+          }
+        }, 100); // Adjust delay for one frame effect
+      } else {
+        cell.classList.remove('alive');
+        cell.classList.remove('dying');
+      }
+
+      if (cell.classList.contains('alive')) {
+        cell.classList.add('alive');
+      } else {
+        cell.classList.remove('alive');
+      }
+    }
+  }
+
+  createGrid();
+  randomize();
+
+</script>
+
+</body>
+</html>

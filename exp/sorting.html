@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bubble Sort Visualizer</title>
+<style>
+  .bar {
+    width: 4%;
+    margin-bottom: 2px;
+    background-color: #f39c12;
+    transition: height 0.5s, background-color 0.5s;
+  }
+  .compared { background-color: red; }
+  .sorted { background-color: green; }
+</style>
+</head>
+<body>
+
+<div id="chart"></div>
+<button onclick="playPause()">Play/Pause</button>
+<button onclick="reset()">Reset</button>
+<input type="range" min="1" max="100" value="50" class="slider" id="speedSlider">
+<label for="speedSlider">Speed: <span id="speedValue"></span></label>
+
+<script>
+  const chart = document.getElementById('chart');
+  let bars = [];
+  let playInterval;
+  let isPlaying = false;
+
+  function generateBars() {
+    chart.innerHTML = '';
+    bars = Array.from({ length: 40 }, () => Math.floor(Math.random() * 100) + 1);
+    for (let i = 0; i < bars.length; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.style.height = `${bars[i]}px`;
+      chart.appendChild(bar);
+    }
+  }
+
+  function bubbleSort() {
+    if (!isPlaying) return;
+
+    let swapped;
+    for (let i = 0; i < bars.length - 1; i++) {
+      swapped = false;
+      for (let j = 0; j < bars.length - 1 - i; j++) {
+        const bar1 = chart.children[j];
+        const bar2 = chart.children[j + 1];
+        
+        if (parseInt(bar1.style.height) > parseInt(bar2.style.height)) {
+          [bars[j], bars[j + 1]] = [bars[j + 1], bars[j]];
+          
+          bar1.classList.remove('sorted');
+          bar2.classList.remove('sorted');
+
+          bar1.classList.add('compared');
+          bar2.classList.add('compared');
+
+          setTimeout(() => {
+            chart.replaceChild(bar2, bar1);
+            chart.appendChild(bar1);
+
+            bar1.classList.remove('compared');
+            bar2.classList.remove('compared');
+
+            bar1.classList.add('sorted');
+            bar2.classList.add('sorted');
+
+            swapped = true;
+          }, j * 50); // Adjust delay for smoother animation
+        }
+      }
+
+      if (!swapped) break; // No swaps means array is sorted, so exit early
+    }
+  }
+
+  function playPause() {
+    if (isPlaying) {
+      clearInterval(playInterval);
+    } else {
+      playInterval = setInterval(bubbleSort, document.getElementById('speedSlider').value);
+    }
+    isPlaying = !isPlaying;
+  }
+
+  function reset() {
+    clearInterval(playInterval);
+    isPlaying = false;
+    generateBars();
+  }
+
+  generateBars();
+
+  const speedSlider = document.getElementById('speedSlider');
+  speedSlider.oninput = function() {
+    clearInterval(playInterval);
+    playPause(); // Reinitialize the interval with the new speed
+    document.getElementById('speedValue').innerText = this.value;
+  };
+</script>
+
+</body>
+</html>
