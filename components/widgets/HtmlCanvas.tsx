@@ -28,7 +28,7 @@ ${html}
 export function HtmlCanvas({ params }: { params: HtmlCanvasParams }) {
   const [view, setView] = useState<'preview' | 'code'>('preview');
   const [collapsed, setCollapsed] = useState(false);
-  const srcDoc = useMemo(() => ensureFullDocument(params.html), [params.html]);
+  const srcDoc = useMemo(() => ensureFullDocument(params.html ?? ''), [params.html]);
 
   return (
     <Card

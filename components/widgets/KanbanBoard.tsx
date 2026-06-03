@@ -6,7 +6,19 @@ import { KanbanParams } from '@/types/widget';
 import { Badge } from '@/components/ui/badge';
 
 export function KanbanBoard({ params }: { params: KanbanParams }) {
-  const [columns, setColumns] = useState(params.columns);
+  // Normalise: guarantee id + tasks exist even when the LLM omits them
+  const [columns, setColumns] = useState(
+    (params.columns ?? []).map((col, ci) => ({
+      ...col,
+      id: col.id ?? `col-${ci}`,
+      color: col.color ?? '#888',
+      tasks: (col.tasks ?? []).map((task, ti) => ({
+        ...task,
+        id: task.id ?? `task-${ci}-${ti}`,
+        priority: task.priority ?? 'medium',
+      })),
+    }))
+  );
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
@@ -28,11 +40,8 @@ export function KanbanBoard({ params }: { params: KanbanParams }) {
     let sourceColId = '';
 
     columns.forEach(col => {
-      const task = col.tasks.find(t => t.id === draggedTaskId);
-      if (task) {
-        taskToMove = task;
-        sourceColId = col.id;
-      }
+      const task = (col.tasks ?? []).find(t => t.id === draggedTaskId);
+      if (task) { taskToMove = task; sourceColId = col.id; }
     });
 
     if (!taskToMove || sourceColId === targetColumnId) {
@@ -40,14 +49,11 @@ export function KanbanBoard({ params }: { params: KanbanParams }) {
       return;
     }
 
-    setColumns(prevColumns => 
+    setColumns(prevColumns =>
       prevColumns.map(col => {
-        if (col.id === sourceColId) {
-          return { ...col, tasks: col.tasks.filter(t => t.id !== draggedTaskId) };
-        }
-        if (col.id === targetColumnId) {
-          return { ...col, tasks: [...col.tasks, taskToMove] };
-        }
+        const tasks = col.tasks ?? [];
+        if (col.id === sourceColId) return { ...col, tasks: tasks.filter(t => t.id !== draggedTaskId) };
+        if (col.id === targetColumnId) return { ...col, tasks: [...tasks, taskToMove] };
         return col;
       })
     );

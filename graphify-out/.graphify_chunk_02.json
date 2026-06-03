@@ -1,0 +1,686 @@
+{
+  "nodes": [
+    {
+      "id": "widget-renderer",
+      "label": "WidgetRenderer",
+      "type": "component",
+      "file": "components/widgets/WidgetRenderer.tsx",
+      "line": 20,
+      "summary": "Registry-based React component that dynamically dispatches rendering to the correct widget component based on widget.type.",
+      "tags": ["registry-pattern", "widget", "react"]
+    },
+    {
+      "id": "widget-registry",
+      "label": "WIDGET_REGISTRY",
+      "type": "concept",
+      "file": "components/widgets/WidgetRenderer.tsx",
+      "line": 12,
+      "summary": "Strongly-typed Record mapping Widget type discriminants to React component constructors, enabling exhaustive compile-time matching.",
+      "tags": ["registry", "typescript", "dispatch"]
+    },
+    {
+      "id": "text-widget",
+      "label": "TextWidget",
+      "type": "component",
+      "file": "components/widgets/WidgetRenderer.tsx",
+      "line": 7,
+      "summary": "Stub widget component for text type; returns null as text content is rendered by MessageBubble.",
+      "tags": ["widget", "stub"]
+    },
+    {
+      "id": "lib-ai",
+      "label": "lib/ai.ts",
+      "type": "module",
+      "file": "lib/ai.ts",
+      "line": 1,
+      "summary": "Configures and exports the AI model using @ai-sdk/openai pointed at SiliconFlow's OpenAI-compatible API with DeepSeek-V4-Flash.",
+      "tags": ["ai", "model", "siliconflow", "openai-compatible"]
+    },
+    {
+      "id": "get-model",
+      "label": "getModel",
+      "type": "function",
+      "file": "lib/ai.ts",
+      "line": 8,
+      "summary": "Returns a configured chat model instance using siliconflow provider with DeepSeek-V4-Flash, forcing Chat Completions API.",
+      "tags": ["ai", "model-factory", "deepseek"]
+    },
+    {
+      "id": "siliconflow-provider",
+      "label": "SiliconFlow Provider",
+      "type": "api",
+      "file": "lib/ai.ts",
+      "line": 3,
+      "summary": "OpenAI-compatible API provider hosted at api.siliconflow.com, used as the inference backend for the application.",
+      "tags": ["external-api", "openai-compatible", "siliconflow"]
+    },
+    {
+      "id": "dns-patch",
+      "label": "lib/dns-patch.mjs",
+      "type": "module",
+      "file": "lib/dns-patch.mjs",
+      "line": 1,
+      "summary": "Monkey-patches Node.js dns.lookup to fall back to Google Public DNS (8.8.8.8 / 1.1.1.1) when system resolver fails, fixing Tailscale + NixOS DNS issues.",
+      "tags": ["dns", "nixos", "tailscale", "patch", "nodejs"]
+    },
+    {
+      "id": "lib-skills",
+      "label": "lib/skills.ts",
+      "type": "module",
+      "file": "lib/skills.ts",
+      "line": 1,
+      "summary": "Defines the Skill interface and BUILTIN_SKILLS array listing trigger keywords and prompt templates for widget-generating skills.",
+      "tags": ["skills", "triggers", "prompts"]
+    },
+    {
+      "id": "skill-interface",
+      "label": "Skill",
+      "type": "class",
+      "file": "lib/skills.ts",
+      "line": 1,
+      "summary": "TypeScript interface defining a skill with name, trigger keyword, description, and prompt template fields.",
+      "tags": ["interface", "skill"]
+    },
+    {
+      "id": "builtin-skills",
+      "label": "BUILTIN_SKILLS",
+      "type": "concept",
+      "file": "lib/skills.ts",
+      "line": 8,
+      "summary": "Array of built-in skill definitions covering kanban, dashboard, gravity simulation, and interactive table triggers.",
+      "tags": ["skills", "kanban", "dashboard", "gravity", "table"]
+    },
+    {
+      "id": "lib-db-index",
+      "label": "lib/db/index.ts",
+      "type": "module",
+      "file": "lib/db/index.ts",
+      "line": 1,
+      "summary": "Creates and exports a Drizzle ORM database instance connected to PostgreSQL via connection pool using DATABASE_URL env variable.",
+      "tags": ["database", "drizzle", "postgresql", "orm"]
+    },
+    {
+      "id": "db-instance",
+      "label": "db",
+      "type": "concept",
+      "file": "lib/db/index.ts",
+      "line": 9,
+      "summary": "Exported Drizzle ORM instance bound to the PostgreSQL pool and schema, used for all database queries.",
+      "tags": ["database", "drizzle", "export"]
+    },
+    {
+      "id": "lib-db-schema",
+      "label": "lib/db/schema.ts",
+      "type": "module",
+      "file": "lib/db/schema.ts",
+      "line": 1,
+      "summary": "Defines PostgreSQL table schemas for chats and messages using Drizzle ORM pg-core, including JSONB columns for widget and tool invocations.",
+      "tags": ["database", "schema", "drizzle", "postgresql"]
+    },
+    {
+      "id": "chats-table",
+      "label": "chats table",
+      "type": "concept",
+      "file": "lib/db/schema.ts",
+      "line": 3,
+      "summary": "PostgreSQL table representing a chat session with id, title, and createdAt timestamp.",
+      "tags": ["database", "table", "chat"]
+    },
+    {
+      "id": "messages-table",
+      "label": "messages table",
+      "type": "concept",
+      "file": "lib/db/schema.ts",
+      "line": 9,
+      "summary": "PostgreSQL table storing chat messages with role, content, jsonb widget column, jsonb toolInvocations column, and cascade-delete FK to chats.",
+      "tags": ["database", "table", "messages", "jsonb"]
+    },
+    {
+      "id": "types-widget",
+      "label": "types/widget.ts",
+      "type": "module",
+      "file": "types/widget.ts",
+      "line": 1,
+      "summary": "Central Zod schema definitions for all widget types and the AIResponse schema; exports TypeScript types inferred from schemas.",
+      "tags": ["types", "zod", "schema", "widget"]
+    },
+    {
+      "id": "gravity-params-schema",
+      "label": "GravityParamsSchema",
+      "type": "concept",
+      "file": "types/widget.ts",
+      "line": 3,
+      "summary": "Zod schema defining gravity simulation parameters: celestial bodies with mass, radius, color, position, and velocity vectors.",
+      "tags": ["zod", "schema", "gravity", "physics"]
+    },
+    {
+      "id": "kanban-params-schema",
+      "label": "KanbanParamsSchema",
+      "type": "concept",
+      "file": "types/widget.ts",
+      "line": 16,
+      "summary": "Zod schema for kanban board columns containing tasks with id, title, and priority enum.",
+      "tags": ["zod", "schema", "kanban"]
+    },
+    {
+      "id": "dashboard-params-schema",
+      "label": "DashboardParamsSchema",
+      "type": "concept",
+      "file": "types/widget.ts",
+      "line": 29,
+      "summary": "Zod schema for dashboard widget with KPIs, chart configuration, and optional table data.",
+      "tags": ["zod", "schema", "dashboard"]
+    },
+    {
+      "id": "html-canvas-params-schema",
+      "label": "HtmlCanvasParamsSchema",
+      "type": "concept",
+      "file": "types/widget.ts",
+      "line": 51,
+      "summary": "Zod schema for html-canvas widget carrying raw HTML/CSS/JS payload to render inside an iframe.",
+      "tags": ["zod", "schema", "html-canvas", "iframe"]
+    },
+    {
+      "id": "widget-schema",
+      "label": "WidgetSchema",
+      "type": "concept",
+      "file": "types/widget.ts",
+      "line": 56,
+      "summary": "Zod discriminated union of all widget type schemas keyed on the 'type' literal field.",
+      "tags": ["zod", "schema", "discriminated-union", "widget"]
+    },
+    {
+      "id": "ai-response-schema",
+      "label": "AIResponseSchema",
+      "type": "concept",
+      "file": "types/widget.ts",
+      "line": 65,
+      "summary": "Top-level Zod schema combining a widget payload with a text string, representing the full AI response structure.",
+      "tags": ["zod", "schema", "ai-response"]
+    },
+    {
+      "id": "chat-message-type",
+      "label": "ChatMessage",
+      "type": "class",
+      "file": "types/widget.ts",
+      "line": 79,
+      "summary": "TypeScript type extending chat messages with optional widget, createdAt, and toolInvocations fields for agent loop support.",
+      "tags": ["type", "chat", "message"]
+    },
+    {
+      "id": "docker-compose",
+      "label": "docker-compose.yml",
+      "type": "config",
+      "file": "docker-compose.yml",
+      "line": 1,
+      "summary": "Defines a PostgreSQL 15-alpine service named intellirender_db on port 5432 with a persistent pgdata volume.",
+      "tags": ["docker", "postgresql", "infrastructure"]
+    },
+    {
+      "id": "doc-extra-features",
+      "label": "extra_features_architecture.md",
+      "type": "concept",
+      "file": "docs/extra_features_architecture.md",
+      "line": 1,
+      "summary": "Architecture document describing the persistence layer (PostgreSQL + Drizzle), sidebar, glassmorphism UI, and message deletion features added beyond the core proof-of-concept.",
+      "tags": ["docs", "architecture", "persistence", "ui"]
+    },
+    {
+      "id": "doc-migration-ollama",
+      "label": "migration_anthropic_to_ollama.md",
+      "type": "concept",
+      "file": "docs/migration_anthropic_to_ollama.md",
+      "line": 1,
+      "summary": "Documents the migration from Anthropic SDK to Ollama local inference via OpenAI-compatible API, including model selection rationale (Qwen2.5-Coder over MiniCPM-V).",
+      "tags": ["docs", "migration", "ollama", "anthropic", "ai-provider"]
+    },
+    {
+      "id": "doc-phase2",
+      "label": "phase_2_documentation.md",
+      "type": "concept",
+      "file": "docs/phase_2_documentation.md",
+      "line": 1,
+      "summary": "Documents Phase 2: Widget Protocol Design using Zod schemas, replacement of streamText with generateObject, and creation of widget-parser utility.",
+      "tags": ["docs", "phase2", "zod", "structured-output"]
+    },
+    {
+      "id": "doc-phase3",
+      "label": "phase_3_documentation.md",
+      "type": "concept",
+      "file": "docs/phase_3_documentation.md",
+      "line": 1,
+      "summary": "Documents Phase 3: Widget Renderer Architecture implementing the registry pattern and migrating ChatWindow from useChat hook to custom fetch.",
+      "tags": ["docs", "phase3", "widget-renderer", "registry-pattern"]
+    },
+    {
+      "id": "doc-phase4",
+      "label": "phase_4_documentation.md",
+      "type": "concept",
+      "file": "docs/phase_4_documentation.md",
+      "line": 1,
+      "summary": "Documents Phase 4: Full interactive Kanban widget with HTML5 drag-and-drop and Framer Motion animations.",
+      "tags": ["docs", "phase4", "kanban", "drag-and-drop", "framer-motion"]
+    },
+    {
+      "id": "doc-phase6",
+      "label": "phase_6_documentation.md",
+      "type": "concept",
+      "file": "docs/phase_6_documentation.md",
+      "line": 1,
+      "summary": "Documents Phase 6: 3D Gravity Visualizer using Three.js, React Three Fiber, and a real-time N-body physics simulation at 60 FPS.",
+      "tags": ["docs", "phase6", "threejs", "r3f", "physics", "gravity"]
+    },
+    {
+      "id": "exp-colorpallet",
+      "label": "exp/colorpallet.html",
+      "type": "file",
+      "file": "exp/colorpallet.html",
+      "line": 1,
+      "summary": "Experimental static HTML canvas demoing three chatbot UI color palettes (Calm & Focused, Midnight Focus, Warm & Playful) with simulated chat bubbles and hex codes.",
+      "tags": ["experiment", "ui", "color-palette", "chatbot-ui"]
+    },
+    {
+      "id": "exp-game",
+      "label": "exp/game.html",
+      "type": "file",
+      "file": "exp/game.html",
+      "line": 1,
+      "summary": "Experimental canvas implementing Conway's Game of Life on a 60x40 DOM grid with play/pause, step, and randomize controls.",
+      "tags": ["experiment", "game-of-life", "cellular-automaton", "canvas"]
+    },
+    {
+      "id": "exp-sorting",
+      "label": "exp/sorting.html",
+      "type": "file",
+      "file": "exp/sorting.html",
+      "line": 1,
+      "summary": "Experimental canvas implementing an animated Bubble Sort visualizer with 40 bars, adjustable speed slider, and play/pause/reset controls.",
+      "tags": ["experiment", "bubble-sort", "algorithm-visualizer", "canvas"]
+    },
+    {
+      "id": "concept-n-body-physics",
+      "label": "N-Body Physics Engine",
+      "type": "concept",
+      "file": "docs/phase_6_documentation.md",
+      "line": 17,
+      "summary": "Client-side real-time N-body gravitational simulation using Newton's law, running at 60 FPS via useFrame with orbital trail tracking.",
+      "tags": ["physics", "simulation", "threejs", "useFrame"]
+    },
+    {
+      "id": "concept-glassmorphism",
+      "label": "Glassmorphism UI",
+      "type": "concept",
+      "file": "docs/extra_features_architecture.md",
+      "line": 22,
+      "summary": "UI design approach using backdrop-blur, translucent borders, and radial gradients for a layered frosted-glass aesthetic.",
+      "tags": ["ui", "design", "glassmorphism", "css"]
+    },
+    {
+      "id": "concept-drizzle-orm",
+      "label": "Drizzle ORM",
+      "type": "concept",
+      "file": "docs/extra_features_architecture.md",
+      "line": 9,
+      "summary": "TypeScript-native ORM chosen over Prisma for NixOS compatibility; used for all database interactions in this project.",
+      "tags": ["orm", "drizzle", "nixos", "typescript"]
+    },
+    {
+      "id": "concept-structured-output",
+      "label": "Structured AI Output (generateObject)",
+      "type": "concept",
+      "file": "docs/phase_2_documentation.md",
+      "line": 22,
+      "summary": "AI SDK pattern using generateObject() with Zod schema enforcement to produce validated JSON widget payloads instead of raw text streams.",
+      "tags": ["ai-sdk", "generateObject", "zod", "structured-output"]
+    }
+  ],
+  "edges": [
+    {
+      "source": "widget-renderer",
+      "target": "widget-registry",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "WidgetRenderer defines and uses WIDGET_REGISTRY for component dispatch"
+    },
+    {
+      "source": "widget-renderer",
+      "target": "types-widget",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "note": "Imports Widget type from @/types/widget"
+    },
+    {
+      "source": "widget-registry",
+      "target": "text-widget",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "note": "TextWidget is registered under the 'text' key"
+    },
+    {
+      "source": "widget-renderer",
+      "target": "text-widget",
+      "relation": "renders",
+      "confidence": "EXTRACTED",
+      "note": "WidgetRenderer renders TextWidget for text-type widgets"
+    },
+    {
+      "source": "lib-ai",
+      "target": "get-model",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "lib/ai.ts exports getModel function"
+    },
+    {
+      "source": "lib-ai",
+      "target": "siliconflow-provider",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "note": "Configures createOpenAI client pointing to SiliconFlow's API endpoint"
+    },
+    {
+      "source": "get-model",
+      "target": "siliconflow-provider",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "note": "getModel returns siliconflow.chat('deepseek-ai/DeepSeek-V4-Flash')"
+    },
+    {
+      "source": "lib-db-index",
+      "target": "lib-db-schema",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "note": "imports * as schema from './schema' and passes to drizzle()"
+    },
+    {
+      "source": "lib-db-index",
+      "target": "db-instance",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "exports const db = drizzle(pool, { schema })"
+    },
+    {
+      "source": "lib-db-schema",
+      "target": "chats-table",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "Defines chats pgTable"
+    },
+    {
+      "source": "lib-db-schema",
+      "target": "messages-table",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "Defines messages pgTable with FK reference to chats"
+    },
+    {
+      "source": "messages-table",
+      "target": "chats-table",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "note": "chatId FK references chats.id with cascade delete"
+    },
+    {
+      "source": "types-widget",
+      "target": "widget-schema",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "Defines WidgetSchema as discriminated union of all widget type schemas"
+    },
+    {
+      "source": "types-widget",
+      "target": "ai-response-schema",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "Defines AIResponseSchema combining widget and text fields"
+    },
+    {
+      "source": "types-widget",
+      "target": "gravity-params-schema",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "GravityParamsSchema defined in types/widget.ts"
+    },
+    {
+      "source": "types-widget",
+      "target": "kanban-params-schema",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "KanbanParamsSchema defined in types/widget.ts"
+    },
+    {
+      "source": "types-widget",
+      "target": "dashboard-params-schema",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "DashboardParamsSchema defined in types/widget.ts"
+    },
+    {
+      "source": "types-widget",
+      "target": "html-canvas-params-schema",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "HtmlCanvasParamsSchema defined in types/widget.ts"
+    },
+    {
+      "source": "types-widget",
+      "target": "chat-message-type",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "ChatMessage type defined inline in types/widget.ts"
+    },
+    {
+      "source": "widget-schema",
+      "target": "gravity-params-schema",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "note": "WidgetSchema union includes gravity variant using GravityParamsSchema"
+    },
+    {
+      "source": "widget-schema",
+      "target": "kanban-params-schema",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "note": "WidgetSchema union includes kanban variant"
+    },
+    {
+      "source": "widget-schema",
+      "target": "dashboard-params-schema",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "note": "WidgetSchema union includes dashboard variant"
+    },
+    {
+      "source": "widget-schema",
+      "target": "html-canvas-params-schema",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "note": "WidgetSchema union includes html-canvas variant"
+    },
+    {
+      "source": "ai-response-schema",
+      "target": "widget-schema",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "note": "AIResponseSchema.widget field is typed as WidgetSchema"
+    },
+    {
+      "source": "docker-compose",
+      "target": "lib-db-index",
+      "relation": "configures",
+      "confidence": "INFERRED",
+      "note": "docker-compose spins up the PostgreSQL instance that lib/db/index.ts connects to"
+    },
+    {
+      "source": "doc-extra-features",
+      "target": "lib-db-schema",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Doc explicitly references lib/db/schema.ts and the two table definitions"
+    },
+    {
+      "source": "doc-extra-features",
+      "target": "docker-compose",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Doc references docker-compose.yml as infrastructure for the DB layer"
+    },
+    {
+      "source": "doc-extra-features",
+      "target": "concept-drizzle-orm",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Doc explains the Drizzle ORM selection rationale over Prisma"
+    },
+    {
+      "source": "doc-extra-features",
+      "target": "concept-glassmorphism",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Doc describes glassmorphism styling approach"
+    },
+    {
+      "source": "doc-migration-ollama",
+      "target": "lib-ai",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Migration doc shows the exact lib/ai.ts reconfiguration for OpenAI-compatible Ollama provider"
+    },
+    {
+      "source": "doc-phase2",
+      "target": "types-widget",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Phase 2 doc describes creation of Zod schemas in types/widget.ts"
+    },
+    {
+      "source": "doc-phase2",
+      "target": "concept-structured-output",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Phase 2 doc explains the generateObject approach"
+    },
+    {
+      "source": "doc-phase3",
+      "target": "widget-renderer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Phase 3 doc describes WidgetRenderer and registry pattern implementation"
+    },
+    {
+      "source": "doc-phase4",
+      "target": "widget-renderer",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Phase 4 doc describes updating WidgetRenderer registry with real KanbanBoard component"
+    },
+    {
+      "source": "doc-phase4",
+      "target": "kanban-params-schema",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Phase 4 doc notes KanbanParams are passed from AI generation to KanbanBoard component"
+    },
+    {
+      "source": "doc-phase6",
+      "target": "gravity-params-schema",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Phase 6 doc describes the gravity payload structure from LLM"
+    },
+    {
+      "source": "doc-phase6",
+      "target": "concept-n-body-physics",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "note": "Phase 6 doc describes the N-body physics engine implementation"
+    },
+    {
+      "source": "lib-skills",
+      "target": "skill-interface",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "lib/skills.ts defines the Skill interface"
+    },
+    {
+      "source": "lib-skills",
+      "target": "builtin-skills",
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "note": "lib/skills.ts exports BUILTIN_SKILLS array"
+    },
+    {
+      "source": "builtin-skills",
+      "target": "kanban-params-schema",
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "note": "The 'kanban' trigger skill maps to the kanban widget type defined by KanbanParamsSchema"
+    },
+    {
+      "source": "builtin-skills",
+      "target": "gravity-params-schema",
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "note": "The 'gravity' trigger skill maps to the gravity widget type defined by GravityParamsSchema"
+    },
+    {
+      "source": "builtin-skills",
+      "target": "dashboard-params-schema",
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "note": "The 'dashboard' trigger skill maps to the dashboard widget type"
+    },
+    {
+      "source": "messages-table",
+      "target": "types-widget",
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "note": "The jsonb 'widget' column stores serialized Widget objects whose shape is defined by types/widget.ts"
+    },
+    {
+      "source": "chat-message-type",
+      "target": "widget-schema",
+      "relation": "uses",
+      "confidence": "EXTRACTED",
+      "note": "ChatMessage.widget is typed as Widget (inferred from WidgetSchema)"
+    },
+    {
+      "source": "exp-colorpallet",
+      "target": "concept-glassmorphism",
+      "relation": "references",
+      "confidence": "INFERRED",
+      "note": "Color palette experiment informed the glassmorphism UI color scheme decisions"
+    }
+  ],
+  "hyperedges": [
+    {
+      "members": ["types-widget", "lib-ai", "concept-structured-output"],
+      "relation": "Together they form the AI structured output pipeline: types/widget.ts defines Zod schemas, lib/ai.ts provides the model, and generateObject enforces schema compliance on AI responses.",
+      "confidence": "INFERRED"
+    },
+    {
+      "members": ["docker-compose", "lib-db-index", "lib-db-schema", "concept-drizzle-orm"],
+      "relation": "Collectively implement the persistence layer: docker-compose runs PostgreSQL, lib/db/schema.ts defines tables, lib/db/index.ts creates the Drizzle ORM connection.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "members": ["widget-renderer", "widget-registry", "gravity-params-schema", "kanban-params-schema", "dashboard-params-schema", "html-canvas-params-schema"],
+      "relation": "The widget rendering system: WidgetRenderer dispatches via WIDGET_REGISTRY to the correct component for each widget type defined by the Zod param schemas.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "members": ["exp-colorpallet", "exp-game", "exp-sorting"],
+      "relation": "Experimental HTML canvas files exploring UI concepts (color palettes), cellular automata (Game of Life), and algorithm visualization (Bubble Sort) separate from the main app.",
+      "confidence": "INFERRED"
+    },
+    {
+      "members": ["doc-phase2", "doc-phase3", "doc-phase4", "doc-phase6"],
+      "relation": "Sequential phase documentation recording the iterative development of IntelliRender from Zod schema design through widget renderer, Kanban, and 3D gravity visualizer.",
+      "confidence": "EXTRACTED"
+    },
+    {
+      "members": ["dns-patch", "doc-migration-ollama", "lib-ai"],
+      "relation": "NixOS/environment compatibility layer: dns-patch.mjs fixes Tailscale DNS, migration doc records provider switch history, and lib/ai.ts holds the current working provider config.",
+      "confidence": "INFERRED"
+    }
+  ]
+}

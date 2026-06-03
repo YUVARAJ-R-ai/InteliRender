@@ -1,0 +1,1 @@
+{"nodes": [{"id": "vscode-settings", "label": ".vscode/settings.json", "type": "config", "file": ".vscode/settings.json", "line": 1, "summary": "VSCode workspace settings configuring Live Server port to 5501.", "tags": ["vscode", "dev-tools"], "source_file": "/mnt/drive1/projects/IntelliRender/.vscode/settings.json"}], "edges": [], "hyperedges": []}

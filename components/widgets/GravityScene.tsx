@@ -22,16 +22,29 @@ interface BodyState {
 
 function Simulation({ params }: { params: GravityParams }) {
   const [bodies, setBodies] = useState<BodyState[]>(
-    params.bodies.map(b => ({
-      name: b.name,
-      mass: b.mass,
-      // Increase radius artificially for visibility if it's too small compared to distances
-      radius: Math.max(b.radius * SCALE_FACTOR * 10, 0.5), 
-      color: b.color || '#ffffff',
-      position: new THREE.Vector3(...b.initialPosition).multiplyScalar(SCALE_FACTOR),
-      velocity: new THREE.Vector3(...b.initialVelocity).multiplyScalar(SCALE_FACTOR),
-      path: [new THREE.Vector3(...b.initialPosition).multiplyScalar(SCALE_FACTOR)],
-    }))
+    (params.bodies ?? [])
+      .filter(b => Array.isArray(b.initialPosition) && Array.isArray(b.initialVelocity))
+      .map(b => {
+        const pos: [number, number, number] = [
+          Number(b.initialPosition[0] ?? 0),
+          Number(b.initialPosition[1] ?? 0),
+          Number(b.initialPosition[2] ?? 0),
+        ];
+        const vel: [number, number, number] = [
+          Number(b.initialVelocity[0] ?? 0),
+          Number(b.initialVelocity[1] ?? 0),
+          Number(b.initialVelocity[2] ?? 0),
+        ];
+        return {
+          name: b.name,
+          mass: b.mass,
+          radius: Math.max((b.radius ?? 1) * SCALE_FACTOR * 10, 0.5),
+          color: b.color || '#ffffff',
+          position: new THREE.Vector3(...pos).multiplyScalar(SCALE_FACTOR),
+          velocity: new THREE.Vector3(...vel).multiplyScalar(SCALE_FACTOR),
+          path: [new THREE.Vector3(...pos).multiplyScalar(SCALE_FACTOR)],
+        };
+      })
   );
 
   useFrame(() => {

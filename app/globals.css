@@ -17,7 +17,7 @@
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-foreground: var-[#E8EDF2];
   --color-sidebar: var(--sidebar);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
@@ -47,9 +47,29 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Midnight Focus custom palette */
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-sidebar: var(--bg-sidebar);
+  --color-bg-user-bubble: var(--bg-user-bubble);
+  --color-bg-bot-bubble: var(--bg-bot-bubble);
+  --color-bg-input: var(--bg-input);
+  --color-bg-elevated: var(--bg-elevated);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-muted: var(--text-muted);
+  --color-text-on-accent: var(--text-on-accent);
+
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-border: var(--accent-border);
+
+  --color-border-default: var(--border-default);
+  --color-border-accent: var(--border-accent);
 }
 
 :root {
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-geist-mono: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Monaco, Consolas, monospace;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -85,47 +105,152 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-geist-mono: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Monaco, Consolas, monospace;
+  
+  --bg-primary: #1A1C1E;
+  --bg-sidebar: #141618;
+  --bg-user-bubble: #2D2F33;
+  --bg-bot-bubble: transparent;
+  --bg-input: #2D2F33;
+  --bg-elevated: #1F2226;
+
+  --text-primary: #E8EDF2;
+  --text-muted: #A5A299;
+  --text-on-accent: #1A1C1E;
+
+  --accent: #8AB4F8;
+  --accent-subtle: rgba(138, 180, 248, 0.08);
+  --accent-border: rgba(138, 180, 248, 0.15);
+
+  --border-default: rgba(255, 255, 255, 0.06);
+  --border-accent: rgba(138, 180, 248, 0.15);
+
+  /* Map standard variables too */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --card: var(--bg-elevated);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent);
+  --primary-foreground: var(--text-on-accent);
+  --secondary: var(--bg-user-bubble);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-user-bubble);
+  --muted-foreground: var(--text-muted);
+  --border: var(--border-default);
+  --input: var(--bg-input);
+  --ring: var(--accent);
+
+  --sidebar: var(--bg-sidebar);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--text-on-accent);
+  --sidebar-accent: var(--bg-user-bubble);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-default);
+  --sidebar-ring: var(--accent);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+    outline-color: #8AB4F8;
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   html {
     @apply font-sans;
   }
+  ::selection {
+    background: rgba(138, 180, 248, 0.2);
+  }
+}
+
+/* ── IntelliRender Animations ─────────────────────────────────────────────── */
+
+@keyframes ir-fade-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes ir-fade-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+
+@keyframes ir-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes ir-send-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(138, 180, 248, 0); }
+  50%       { box-shadow: 0 0 0 4px rgba(138, 180, 248, 0.25); }
+}
+
+@keyframes ir-drawer-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0);    }
+}
+
+@keyframes ir-drawer-in-bottom {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0);    }
+}
+
+.ir-fade-slide-up  { animation: ir-fade-slide-up  350ms ease-out both; }
+.ir-fade-scale-in  { animation: ir-fade-scale-in  200ms ease      both; }
+.ir-fade-in        { animation: ir-fade-in         200ms ease      both; }
+.ir-drawer-in      { animation: ir-drawer-in 240ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+.ir-send-pulse:not(:disabled):hover { animation: ir-send-pulse 1.6s ease infinite; }
+
+/* On mobile the drawer is a bottom sheet — slide up instead of in from the right */
+@media (max-width: 767px) {
+  .ir-drawer-in { animation-name: ir-drawer-in-bottom; }
+}
+
+/* Stagger helpers */
+.ir-stagger-1 { animation-delay: 0ms;   }
+.ir-stagger-2 { animation-delay: 60ms;  }
+.ir-stagger-3 { animation-delay: 120ms; }
+.ir-stagger-4 { animation-delay: 180ms; }
+
+/* Chips scroll fade-out mask on right edge */
+.chips-fade-mask {
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 2.5rem), transparent 100%);
+          mask-image: linear-gradient(to right, black calc(100% - 2.5rem), transparent 100%);
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .ir-fade-slide-up,
+  .ir-fade-scale-in,
+  .ir-fade-in,
+  .ir-drawer-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .ir-send-pulse:not(:disabled):hover { animation: none !important; }
+  .ir-stagger-1, .ir-stagger-2, .ir-stagger-3, .ir-stagger-4 { animation-delay: 0ms !important; }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2D2F33;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3D3F43;
 }

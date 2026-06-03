@@ -1,0 +1,1 @@
+{"nodes": [{"id": "exp-game", "label": "exp/game.html", "type": "file", "file": "exp/game.html", "line": 1, "summary": "Experimental canvas implementing Conway's Game of Life on a 60x40 DOM grid with play/pause, step, and randomize controls.", "tags": ["experiment", "game-of-life", "cellular-automaton", "canvas"], "source_file": "exp/game.html"}], "edges": [], "hyperedges": []}

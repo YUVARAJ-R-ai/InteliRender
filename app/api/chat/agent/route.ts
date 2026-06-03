@@ -1,0 +1,594 @@
+import { streamText, tool, convertToModelMessages, jsonSchema, stepCountIs } from 'ai';
+import { getModel } from '@/lib/ai';
+import { getSiliconFlowKey } from '@/lib/user-settings';
+import { decrypt } from '@/lib/encryption';
+import { mcpConnections } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
+import { auth } from '@/auth';
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { db } from '@/lib/db';
+import { messages as messagesTable, chats } from '@/lib/db/schema';
+import { getAppConfig } from '@/lib/app-config';
+
+export const maxDuration = 60;
+
+// Maps service name → the stdio command + env var setup for that MCP server
+const DB_MCP_SERVICE_CONFIGS: Record<string, {
+  command: string;
+  args: string[];
+  envKey: string; // env var name for the per-user token
+  envTransform?: (token: string) => string;
+  // app-level env vars to pull from appConfig (DB key → env var name)
+  appConfigEnv?: Record<string, string>;
+  // secondary env vars read from conn.metadata JSON (metadata key → env var name)
+  metadataEnv?: Record<string, string>;
+}> = {
+  github: {
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-github'],
+    envKey: 'GITHUB_PERSONAL_ACCESS_TOKEN',
+  },
+  notion: {
+    command: 'npx',
+    args: ['-y', '@notionhq/notion-mcp-server'],
+    envKey: 'OPENAPI_MCP_HEADERS',
+    envTransform: (token) => JSON.stringify({ Authorization: `Bearer ${token}` }),
+  },
+  linear: {
+    command: 'npx',
+    args: ['-y', '@linear/mcp-server'],
+    envKey: 'LINEAR_API_KEY',
+  },
+  google_forms: {
+    command: 'node',
+    args: ['/mnt/drive1/projects/google-forms-mcp/build/index.js'],
+    envKey: 'GOOGLE_REFRESH_TOKEN',
+    appConfigEnv: {
+      google_client_id: 'GOOGLE_CLIENT_ID',
+      google_client_secret: 'GOOGLE_CLIENT_SECRET',
+    },
+  },
+  gmail: {
+    command: 'npx',
+    args: ['-y', 'mcp-gmail'],
+    envKey: 'GMAIL_REFRESH_TOKEN',
+    appConfigEnv: {
+      google_client_id: 'GOOGLE_CLIENT_ID',
+      google_client_secret: 'GOOGLE_CLIENT_SECRET',
+    },
+  },
+  google_drive: {
+    command: 'npx',
+    args: ['-y', 'mcp-google-drive'],
+    envKey: 'GOOGLE_REFRESH_TOKEN',
+    appConfigEnv: {
+      google_client_id: 'GOOGLE_CLIENT_ID',
+      google_client_secret: 'GOOGLE_CLIENT_SECRET',
+    },
+  },
+  google_calendar: {
+    command: 'npx',
+    args: ['-y', 'google-calendar-mcp'],
+    envKey: 'GOOGLE_REFRESH_TOKEN',
+    appConfigEnv: {
+      google_client_id: 'GOOGLE_CLIENT_ID',
+      google_client_secret: 'GOOGLE_CLIENT_SECRET',
+    },
+  },
+  stripe: {
+    command: 'npx',
+    args: ['-y', '@stripe/agent-toolkit'],
+    envKey: 'STRIPE_SECRET_KEY',
+  },
+  postgres: {
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-postgres'],
+    envKey: 'POSTGRES_CONNECTION_STRING',
+  },
+  slack: {
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-slack'],
+    envKey: 'SLACK_BOT_TOKEN',
+    // SLACK_TEAM_ID is non-secret; stored in mcpConnections.metadata as { teamId }
+    metadataEnv: { teamId: 'SLACK_TEAM_ID' },
+  },
+};
+
+/** Loads connected MCP services from the DB and converts them to server descriptors */
+async function loadDbMcpServers(userId: string) {
+  const connections = await db
+    .select({ service: mcpConnections.service, accessToken: mcpConnections.accessToken, status: mcpConnections.status, metadata: mcpConnections.metadata })
+    .from(mcpConnections)
+    .where(eq(mcpConnections.userId, userId));
+
+  const servers = [];
+  for (const conn of connections) {
+    if (conn.status !== 'connected' || !conn.accessToken) continue;
+    const cfg = DB_MCP_SERVICE_CONFIGS[conn.service];
+    if (!cfg) continue;
+
+    let token: string;
+    try { token = decrypt(conn.accessToken); } catch { continue; }
+
+    const envValue = cfg.envTransform ? cfg.envTransform(token) : token;
+
+    // Resolve app-level credentials from DB (overrides process.env)
+    const appEnv: Record<string, string> = {};
+    if (cfg.appConfigEnv) {
+      for (const [dbKey, envVarName] of Object.entries(cfg.appConfigEnv)) {
+        const val = await getAppConfig(dbKey);
+        if (val) appEnv[envVarName] = val;
+      }
+    }
+
+    // Resolve secondary non-secret config from conn.metadata (e.g. SLACK_TEAM_ID)
+    if (cfg.metadataEnv && conn.metadata) {
+      const meta = conn.metadata as Record<string, string>;
+      for (const [metaKey, envVarName] of Object.entries(cfg.metadataEnv)) {
+        if (meta[metaKey]) appEnv[envVarName] = meta[metaKey];
+      }
+    }
+
+    servers.push({
+      name: conn.service,
+      command: cfg.command,
+      args: cfg.args,
+      isEnabled: true,
+      env: { ...appEnv, [cfg.envKey]: envValue },
+    });
+  }
+  return servers;
+}
+
+const SYSTEM_PROMPT = `
+You are IntelliRender, an agentic visual response engine.
+
+TOOL SELECTION RULES:
+- Visual/UI widgets (kanban, dashboard, gravity, canvas, timeline, mindmap, flowchart, matrix, pomodoro): use render_widget with type html-canvas and generate self-contained HTML/CSS/JS.
+- Web lookups: use web_search.
+- Fetch full page content: use fetch_url.
+- Math / financial calculations: use calculate before building a widget with numbers.
+- Export data as CSV: use generate_csv, then reply with the returned dataUrl as a markdown download link.
+- Complex reasoning: use think before acting.
+- Google Forms: ALWAYS use create_google_form (the compound tool). NEVER call google_forms_create_form or google_forms_add_text_question directly — the compound tool handles everything in one shot.
+
+GOOGLE FORMS — HOW TO USE:
+Call create_google_form ONCE with the full form structure:
+{
+  "title": "Form Title",
+  "description": "Optional description",
+  "questions": [
+    { "title": "Name", "type": "text", "required": true },
+    { "title": "Employee ID", "type": "text", "required": true },
+    { "title": "Role", "type": "multiple_choice", "options": ["Engineer","Manager","Designer"], "required": false }
+  ]
+}
+AFTER create_google_form returns you MUST reply with a text message. Never end your turn silently after a tool call.
+Your reply MUST follow this exact format — no exceptions:
+
+✅ Your form is ready!
+
+**[Open Form →](RESPONDER_URI)**
+[Edit Form](EDIT_URI)
+
+Replace RESPONDER_URI and EDIT_URI with the values from the tool result.
+`;
+
+function getMessageContent(m: any): string {
+  if (typeof m.content === 'string' && m.content) {
+    return m.content;
+  }
+  if (Array.isArray(m.parts)) {
+    return m.parts
+      .filter((part: any) => part.type === 'text')
+      .map((part: any) => part.text)
+      .join('\n');
+  }
+  return '';
+}
+
+export async function POST(req: Request) {
+  const mcpClients: Client[] = [];
+  // Maps server name → connected client so compound tools can reuse them
+  const mcpClientMap: Record<string, Client> = {};
+  try {
+    const { messages, chatId, mcpServers } = await req.json();
+
+    // Inject per-user SiliconFlow API key from DB (falls back to env if not set)
+    const session = await auth();
+    const userId = session?.user?.id ?? null;
+    const apiKey = userId ? await getSiliconFlowKey(userId) : undefined;
+
+    // Auto-load MCP connections from DB so the agent can use them without manual registration
+    const dbMcpServers = userId ? await loadDbMcpServers(userId) : [];
+    const allMcpServers = [...(mcpServers ?? []), ...dbMcpServers];
+
+    // 1. Create chat on first message if needed
+    let activeChatId = chatId;
+    if (!activeChatId) {
+      const lastMsgText = getMessageContent(messages[messages.length - 1]);
+      const title = lastMsgText.slice(0, 40) + '...' || 'New Chat';
+      // Associate the chat with the user so it appears in their list on reload.
+      // Without userId the chat is orphaned and filtered out by GET /api/chats.
+      const [newChat] = await db.insert(chats).values({ title, userId }).returning();
+      activeChatId = newChat.id;
+    }
+
+    // 2. Save user message to database
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.role === 'user') {
+      await db.insert(messagesTable).values({
+        chatId: activeChatId,
+        role: 'user',
+        content: getMessageContent(lastMessage),
+      });
+    }
+
+    // All built-in tools use inputSchema: jsonSchema(...) — raw JSON Schema guaranteed
+    // to be valid for strict gateways like SiliconFlow/DeepSeek (avoids Zod compilation issues).
+    const dynamicTools: Record<string, any> = {
+      render_widget: tool({
+        description: 'Render an interactive visual widget. Use treemap/code-diff/timeline/network-graph for structured data; html-canvas for custom visuals (timelines, mindmaps, flowcharts, pomodoro).',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            title:       { type: 'string', description: 'Widget title' },
+            type:        { type: 'string', enum: ['chart','kanban','dashboard','table','form','custom','html-canvas','treemap','code-diff','timeline','network-graph'] },
+            html:        { type: 'string', description: 'Full HTML/CSS/JS for html-canvas type' },
+            jsx_or_html: { type: 'string', description: 'Alias for html' },
+            params:      { type: 'object', description: 'Structured data for kanban/dashboard/gravity/treemap/code-diff/timeline/network-graph widgets', additionalProperties: true },
+            reasoning:   { type: 'string', description: 'Why this widget type was chosen' },
+          },
+          required: ['title', 'type', 'reasoning'],
+          additionalProperties: false,
+        } as any),
+        execute: async (params: any) => {
+          if (params.type === 'kanban' && params.params?.columns) {
+            return { type: 'kanban', columns: params.params.columns };
+          }
+          if (params.type === 'dashboard' && params.params) {
+            return { type: 'dashboard', kpis: params.params.kpis, chart: params.params.chart, table: params.params.table };
+          }
+          if (params.type === 'gravity' && params.params) {
+            return { type: 'gravity', bodies: params.params.bodies, showForceArrows: params.params.showForceArrows, showOrbitalPaths: params.params.showOrbitalPaths };
+          }
+          if (params.type === 'html-canvas' && (params.html || params.jsx_or_html)) {
+            return { type: 'html-canvas', html: params.html || params.jsx_or_html };
+          }
+          // Return FLAT data (spread params.params) to match the kanban/dashboard/gravity
+          // convention. MessageBubble wraps the whole tool result as the widget's `params`,
+          // so nesting under a `params` key here would double-nest and break the widget
+          // (and crash recharts with undefined data → "Maximum update depth exceeded").
+          if (params.type === 'treemap' && params.params) {
+            return { type: 'treemap', ...params.params };
+          }
+          if (params.type === 'code-diff' && params.params) {
+            return { type: 'code-diff', ...params.params };
+          }
+          if (params.type === 'timeline' && params.params) {
+            return { type: 'timeline', ...params.params };
+          }
+          if (params.type === 'network-graph' && params.params) {
+            return { type: 'network-graph', ...params.params };
+          }
+          return params;
+        }
+      } as any),
+      web_search: tool({
+        description: 'Search the web for up-to-date information.',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search query' },
+          },
+          required: ['query'],
+          additionalProperties: false,
+        } as any),
+        execute: async ({ query }: any) => {
+          if (!process.env.EXA_API_KEY) {
+            return [{ title: "Mock Result", snippet: "Add EXA_API_KEY to .env for real search results." }];
+          }
+          try {
+            const res = await fetch('https://api.exa.ai/search', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': process.env.EXA_API_KEY
+              },
+              body: JSON.stringify({ query, numResults: 3 })
+            });
+            if (!res.ok) throw new Error('Search failed');
+            const data = await res.json();
+            return data.results.map((r: any) => ({ title: r.title, snippet: r.text || r.snippet }));
+          } catch (err) {
+            return [{ title: "Error", snippet: "Search failed to execute." }];
+          }
+        }
+      } as any),
+      think: tool({
+        description: 'Think through complex problems step-by-step before responding or calling other tools.',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            thought: { type: 'string', description: 'Your internal reasoning' },
+          },
+          required: ['thought'],
+          additionalProperties: false,
+        } as any),
+        execute: async ({ thought }: any) => {
+          return { thought, acknowledged: true };
+        }
+      } as any),
+
+      fetch_url: tool({
+        description: 'Fetch the text content of a URL. Use for reading web pages, articles, or documentation.',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'The URL to fetch' },
+          },
+          required: ['url'],
+          additionalProperties: false,
+        } as any),
+        execute: async ({ url }: any) => {
+          try {
+            const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; IntelliRender/1.0)' } });
+            if (!res.ok) return { error: `HTTP ${res.status}` };
+            const html = await res.text();
+            // Strip tags and collapse whitespace
+            const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 8000);
+            return { url, text, truncated: html.length > 8000 };
+          } catch (err: any) {
+            return { error: err.message };
+          }
+        }
+      } as any),
+
+      calculate: tool({
+        description: 'Evaluate a mathematical expression safely. Use for financial calculations, percentages, or any numeric computation before building a widget.',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            expression: { type: 'string', description: 'Math expression e.g. "50000 * Math.pow(1.07, 15)"' },
+            description: { type: 'string', description: 'What this calculation represents' },
+          },
+          required: ['expression'],
+          additionalProperties: false,
+        } as any),
+        execute: async ({ expression, description }: any) => {
+          try {
+            // Restrict to safe math — only allow numbers, operators, Math.*, and parens
+            if (/[^0-9+\-*/().,\s%MathPIEabcdefghijklmnopqrstuvwxyz]/.test(expression)) {
+              return { error: 'Expression contains unsafe characters' };
+            }
+            // eslint-disable-next-line no-new-func
+            const result = Function(`'use strict'; return (${expression})`)();
+            return { expression, result, description: description || '' };
+          } catch (err: any) {
+            return { error: err.message };
+          }
+        }
+      } as any),
+
+      generate_csv: tool({
+        description: 'Generate a downloadable CSV from structured data. Returns a data URI — reply with it as a markdown link: [Download CSV](dataUrl).',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            headers: { type: 'array', items: { type: 'string' }, description: 'Column headers' },
+            rows: { type: 'array', items: { type: 'array', items: { type: 'string' } }, description: 'Data rows' },
+            filename: { type: 'string', description: 'Optional suggested filename (without .csv)' },
+          },
+          required: ['headers', 'rows'],
+          additionalProperties: false,
+        } as any),
+        execute: async ({ headers, rows, filename }: any) => {
+          const escape = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+          const csv = [headers, ...rows].map((row: string[]) => row.map(escape).join(',')).join('\n');
+          const dataUrl = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+          return { dataUrl, rowCount: rows.length, filename: (filename || 'export') + '.csv' };
+        }
+      } as any),
+
+      // Compound tool: creates a complete Google Form with all questions in one shot.
+      // The model supplies all fields upfront; this tool handles the full MCP call chain
+      // internally so the model never needs to manually chain create_form + add_*_question.
+      create_google_form: tool({
+        description: 'Create a complete Google Form with all fields/questions in one call. Use this for ANY Google Forms request — do NOT use the raw google_forms_* MCP tools directly.',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Form title' },
+            description: { type: 'string', description: 'Optional form description shown at the top' },
+            questions: {
+              type: 'array',
+              description: 'All questions to add to the form',
+              items: {
+                type: 'object',
+                properties: {
+                  title:    { type: 'string', description: 'Question text' },
+                  type:     { type: 'string', enum: ['text', 'multiple_choice'], description: 'text = short answer; multiple_choice = radio buttons' },
+                  options:  { type: 'array', items: { type: 'string' }, description: 'Required for multiple_choice questions' },
+                  required: { type: 'boolean', description: 'Whether the question is mandatory' },
+                },
+                required: ['title', 'type'],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ['title', 'questions'],
+          additionalProperties: false,
+        } as any),
+        execute: async ({ title, description, questions }: any) => {
+          // Find the connected Google Forms MCP client
+          const client =
+            mcpClientMap['Google Forms'] ||
+            mcpClientMap['google_forms'] ||
+            mcpClientMap['google-forms'] ||
+            Object.values(mcpClientMap).find((_, k) =>
+              Object.keys(mcpClientMap)[k]?.toLowerCase().includes('form')
+            );
+
+          if (!client) {
+            return { error: 'Google Forms is not connected. Go to Settings → Integrations → Google Forms and paste your refresh token.' };
+          }
+
+          try {
+            // Step 1: create the form (title only, then description via batchUpdate)
+            const createResult = await client.callTool({
+              name: 'create_form',
+              arguments: { title, ...(description ? { description } : {}) },
+            });
+            const createText = (createResult.content as any)[0]?.text ?? '{}';
+            const formData = JSON.parse(createText);
+            const formId: string = formData.formId;
+            if (!formId) return { error: 'Form creation failed: no formId returned', raw: createText };
+
+            // Step 2: add all questions sequentially
+            const results: string[] = [];
+            for (const q of (questions ?? [])) {
+              if (q.type === 'multiple_choice') {
+                await client.callTool({
+                  name: 'add_multiple_choice_question',
+                  arguments: { formId, questionTitle: q.title, options: q.options ?? [], required: q.required ?? false },
+                });
+              } else {
+                await client.callTool({
+                  name: 'add_text_question',
+                  arguments: { formId, questionTitle: q.title, required: q.required ?? false },
+                });
+              }
+              results.push(q.title);
+            }
+
+            return {
+              success: true,
+              formId,
+              questionsAdded: results,
+              responderUri: formData.responderUri,
+              editUri: formData.editUri,
+              message: `Form created. Reply to the user with this exact markdown:\n\n✅ Your form is ready!\n\n**[Open Form →](${formData.responderUri})**\n[Edit Form](${formData.editUri})`,
+            };
+          } catch (err: any) {
+            return { error: `Form creation failed: ${err.message}` };
+          }
+        }
+      } as any),
+    };
+
+    // Load custom MCP servers (UI-registered + DB-connected)
+    if (Array.isArray(allMcpServers)) {
+      for (const server of allMcpServers) {
+        if (!server.isEnabled || !server.command) continue;
+        try {
+          const transport = new StdioClientTransport({
+            command: server.command,
+            args: server.args || [],
+            env: {
+              ...process.env,
+              PATH: process.env.PATH || '',
+              // DB-loaded servers carry their own env overrides (tokens, etc.)
+              ...(server.env ?? {}),
+            },
+          });
+          const client = new Client(
+            { name: server.name || 'custom-mcp-client', version: '1.0.0' },
+            { capabilities: {} }
+          );
+          await client.connect(transport);
+          mcpClients.push(client);
+          mcpClientMap[server.name] = client;
+
+          const toolsResult = await client.listTools();
+          for (const mcpTool of toolsResult.tools) {
+            const cleanServerName = server.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            const toolName = `${cleanServerName}_${mcpTool.name}`;
+            dynamicTools[toolName] = tool({
+              description: mcpTool.description || '',
+              inputSchema: jsonSchema(mcpTool.inputSchema as any),
+              execute: async (args: any) => {
+                // Call the corresponding tool on the active MCP subprocess
+                const callResult = await client.callTool({
+                  name: mcpTool.name,
+                  arguments: args
+                });
+                return callResult;
+              }
+            });
+          }
+        } catch (mcpErr) {
+          console.error(`Failed to load MCP server ${server.name}:`, mcpErr);
+        }
+      }
+    }
+
+    const sdkMessages = await convertToModelMessages(messages);
+
+    const result = streamText({
+      model: getModel(apiKey),
+      messages: sdkMessages,
+      system: SYSTEM_PROMPT,
+      // AI SDK v6 replaced `maxSteps` with `stopWhen`. Without this the model
+      // defaults to stepCountIs(1): it makes the tool call and stops, never
+      // producing the follow-up text reply with the form link.
+      stopWhen: stepCountIs(15),
+      tools: dynamicTools,
+      onFinish: async (info: any) => {
+        // Construct toolInvocations array
+        const toolInvocations = info.toolCalls?.map((call: any) => {
+          const result = info.toolResults?.find((r: any) => r.toolCallId === call.toolCallId);
+          return {
+            state: 'result',
+            toolCallId: call.toolCallId,
+            toolName: call.toolName,
+            args: call.args,
+            result: result ? result.result : undefined
+          };
+        }) || [];
+
+        // Extract the full HTML of any generated html-canvas widget so it can be
+        // re-rendered after reload. Only the completed result is read here (onFinish),
+        // never partial/streaming HTML.
+        const htmlWidget = toolInvocations.find(
+          (ti: any) => ti.toolName === 'render_widget' && ti.result?.type === 'html-canvas' && ti.result?.html
+        );
+        const widgetHtml = htmlWidget ? htmlWidget.result.html : null;
+
+        // Save assistant message to DB
+        await db.insert(messagesTable).values({
+          chatId: activeChatId,
+          role: 'assistant',
+          content: info.text || '',
+          toolInvocations: toolInvocations,
+          widgetHtml,
+        });
+
+        // Disconnect MCP clients
+        for (const client of mcpClients) {
+          try {
+            await client.close();
+          } catch (e) {
+            console.error('Failed to close MCP client', e);
+          }
+        }
+      }
+    } as any);
+
+    const response = result.toUIMessageStreamResponse();
+    // Pass custom header with activeChatId so client can update its activeChatId!
+    response.headers.set('x-chat-id', activeChatId.toString());
+    return response;
+  } catch (error: any) {
+    console.error('Agent route error:', error);
+    // Cleanup on error
+    for (const client of mcpClients) {
+      try {
+        await client.close();
+      } catch (e) {
+        // Ignore
+      }
+    }
+    return new Response(JSON.stringify({ error: error.message ?? String(error) }), { status: 500 });
+  }
+}

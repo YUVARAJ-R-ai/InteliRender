@@ -21,11 +21,13 @@ export function ChartDashboard({ params }: { params: DashboardParams }) {
     }
   };
 
-  const renderChart = () => {
-    if (!chart.data || chart.data.length === 0) return null;
-    
+  const renderChart = (): React.ReactElement | null => {
+    if (!chart?.data || chart.data.length === 0) return null;
+    const firstPoint = chart.data[0];
+    if (!firstPoint || typeof firstPoint !== 'object') return null;
+
     // Determine keys for X and Y axis based on the first data point
-    const dataKeys = Object.keys(chart.data[0]);
+    const dataKeys = Object.keys(firstPoint);
     // Assume first key is X axis (often 'name', 'date', or 'month'), the rest are data series
     const xAxisKey = dataKeys[0];
     const seriesKeys = dataKeys.slice(1);
@@ -131,19 +133,23 @@ export function ChartDashboard({ params }: { params: DashboardParams }) {
       )}
 
       {/* Main Chart Area */}
-      {chart && (
-        <Card className="bg-muted/10 p-6 border-border/50">
-          <h3 className="font-semibold mb-6">{chart.title}</h3>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              {renderChart()}
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      )}
+      {chart && (() => {
+        const chartEl = renderChart();
+        if (!chartEl) return null;
+        return (
+          <Card className="bg-muted/10 p-6 border-border/50">
+            <h3 className="font-semibold mb-6">{chart.title}</h3>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                {chartEl}
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* Optional Table */}
-      {table && table.headers && (
+      {table && Array.isArray(table.headers) && table.headers.length > 0 && (
         <Card className="bg-muted/10 overflow-hidden border-border/50">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -155,10 +161,10 @@ export function ChartDashboard({ params }: { params: DashboardParams }) {
                 </tr>
               </thead>
               <tbody>
-                {table.rows.map((row, i) => (
+                {(table.rows ?? []).map((row, i) => (
                   <tr key={i} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
-                    {row.map((cell, j) => (
-                      <td key={j} className="px-6 py-4">{cell}</td>
+                    {(row ?? []).map((cell, j) => (
+                      <td key={j} className="px-6 py-4">{String(cell ?? '')}</td>
                     ))}
                   </tr>
                 ))}

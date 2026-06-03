@@ -1,47 +1,39 @@
-import { generateObject, generateText } from 'ai';
-import { z } from 'zod';
+import { generateText } from 'ai';
 import { getModel } from '@/lib/ai';
+import { getSiliconFlowKey } from '@/lib/user-settings';
 import {
-  AIResponseSchema,
   GravityParamsSchema,
   KanbanParamsSchema,
   DashboardParamsSchema,
 } from '@/types/widget';
 import { db } from '@/lib/db';
 import { messages as messagesTable, chats } from '@/lib/db/schema';
+import { auth } from '@/auth';
 
 export const maxDuration = 60;
 
-// Step 1 schema: decide widget type + produce all non-HTML params in one shot.
-// html-canvas is intentionally excluded — HTML is generated separately in step 2.
-const DecisionSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('text'),      text: z.string() }),
-  z.object({ type: z.literal('gravity'),   text: z.string(), params: GravityParamsSchema }),
-  z.object({ type: z.literal('kanban'),    text: z.string(), params: KanbanParamsSchema }),
-  z.object({ type: z.literal('dashboard'), text: z.string(), params: DashboardParamsSchema }),
-  z.object({ type: z.literal('html-canvas'), text: z.string() }),
-]);
+const DECISION_PROMPT = `You are IntelliRender AI — a versatile assistant that can chat, answer questions, AND generate interactive visual widgets.
 
-const DECISION_PROMPT = `
-You are IntelliRender AI — a versatile assistant that can chat, answer questions, AND generate interactive visual widgets.
-
-Decide the best response type:
-- "text": general conversation, explanations, answers, code reviews, any topic. Give a complete, helpful, thorough answer in the "text" field.
+Decide the best response type for the user's message:
+- "text": general conversation, explanations, answers, code reviews, any topic.
 - "gravity": physics / orbital / gravity simulations.
 - "kanban": task boards, project planning, sprint planning.
 - "dashboard": KPIs, charts, metrics, financial data.
 - "html-canvas": interactive UI, games, visualizers, calculators, animations — anything that needs running code.
 
-Output a JSON object with:
-- "type": one of the above
-- "text": your full response (for "text" type this IS the answer; for widgets this is a one-liner like "Here is your bubble sort visualizer.")
-- "params": required only for gravity / kanban / dashboard — populate with realistic data.
+You MUST respond with ONLY a valid JSON object (no markdown fences, no extra text) in this exact format:
+{"type": "<type>", "text": "<your response>"}
 
-For "html-canvas" and "text" types, omit "params".
-`;
+For "text" type: the "text" field IS your full answer. Make it thorough and helpful.
+For "gravity"/"kanban"/"dashboard": include a "params" field with realistic data.
+For "html-canvas": just include "type" and "text" (a one-liner description). The HTML will be generated separately.
 
-const HTML_GEN_PROMPT = `
-You are a frontend developer. Output ONLY a complete, standalone HTML document — no explanation, no markdown fences, no JSON.
+Examples:
+User: "hello" → {"type":"text","text":"Hello! How can I help you today?"}
+User: "create a kanban board" → {"type":"kanban","text":"Here's your project board.","params":{...}}
+User: "build a calculator" → {"type":"html-canvas","text":"Here's an interactive calculator for you."}`;
+
+const HTML_GEN_PROMPT = `You are a frontend developer. Output ONLY a complete, standalone HTML document — no explanation, no markdown fences, no JSON wrapper.
 
 Rules:
 - Start with <!DOCTYPE html> on the first line.
@@ -49,8 +41,7 @@ Rules:
 - Scripts must be self-executing: define functions AND call them. Use DOMContentLoaded if you need the DOM ready.
 - Make the UI fill the full viewport (use width:100%; height:100vh or similar).
 - Use a dark background (#1a1a2e or similar) unless the content requires white.
-- For canvas-based apps: set canvas.width = window.innerWidth and canvas.height = window.innerHeight - controlsHeight.
-`;
+- For canvas-based apps: set canvas.width = window.innerWidth and canvas.height = window.innerHeight - controlsHeight.`;
 
 function buildAiMessages(messages: any[]) {
   return messages.map((m: any) => {
@@ -64,15 +55,40 @@ function buildAiMessages(messages: any[]) {
   });
 }
 
+function extractJSON(text: string): any {
+  // Try direct parse first
+  try { return JSON.parse(text); } catch {}
+
+  // Strip markdown fences if present
+  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (fenceMatch) {
+    try { return JSON.parse(fenceMatch[1].trim()); } catch {}
+  }
+
+  // Find first { ... } block
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)); } catch {}
+  }
+
+  // Fallback: treat entire response as text
+  return { type: 'text', text: text.trim() };
+}
+
 export async function POST(req: Request) {
   try {
     const { messages, chatId } = await req.json();
+
+    const session = await auth();
+    const userId = session?.user?.id ?? null;
+    const apiKey = userId ? await getSiliconFlowKey(userId) : undefined;
 
     // Create chat on first message
     let activeChatId = chatId;
     if (!activeChatId) {
       const title = messages[messages.length - 1]?.content?.slice(0, 40) + '...' || 'New Chat';
-      const [newChat] = await db.insert(chats).values({ title }).returning();
+      const [newChat] = await db.insert(chats).values({ title, userId }).returning();
       activeChatId = newChat.id;
     }
 
@@ -87,26 +103,25 @@ export async function POST(req: Request) {
 
     const aiMessages = buildAiMessages(messages);
 
-    // ── Step 1: decide widget type (small schema, fast) ──────────────────────
-    const decision = await generateObject({
-      model: getModel(),
-      maxOutputTokens: 1500,
-      maxRetries: 1,
-      messages: aiMessages,
+    // ── Step 1: decide widget type via generateText ──────────────────────
+    const decisionResult = await generateText({
+      model: getModel(apiKey),
+      maxOutputTokens: 2000,
+      maxRetries: 2,
+      messages: aiMessages.map(m => ({ role: m.role, content: m.content })),
       system: DECISION_PROMPT,
-      schema: DecisionSchema,
     });
 
-    const d = decision.object;
+    const d = extractJSON(decisionResult.text);
     let aiResponse: { text: string; widget: any };
 
     if (d.type === 'html-canvas') {
-      // ── Step 2: generate the HTML with generateText (no JSON escaping) ──────
+      // ── Step 2: generate the HTML with generateText ──────
       const htmlResult = await generateText({
-        model: getModel(),
+        model: getModel(apiKey),
         maxOutputTokens: 4096,
         maxRetries: 1,
-        messages: aiMessages,
+        messages: aiMessages.map(m => ({ role: m.role, content: m.content })),
         system: HTML_GEN_PROMPT,
       });
 
@@ -117,26 +132,33 @@ export async function POST(req: Request) {
         : raw;
 
       aiResponse = {
-        text: d.text,
+        text: d.text || 'Here is your interactive widget.',
         widget: { type: 'html-canvas', params: { html } },
       };
-    } else if (d.type === 'text') {
+    } else if (d.type === 'text' || !d.type) {
       aiResponse = {
-        text: d.text,
-        widget: { type: 'text', params: { content: d.text } },
+        text: d.text || decisionResult.text,
+        widget: { type: 'text', params: { content: d.text || decisionResult.text } },
       };
     } else {
+      // gravity / kanban / dashboard
       aiResponse = {
-        text: d.text,
-        widget: { type: d.type, params: (d as any).params },
+        text: d.text || 'Here is your widget.',
+        widget: { type: d.type, params: d.params || {} },
       };
     }
+
+    // Persist the full HTML of an html-canvas widget so it survives a reload.
+    const widgetHtml = aiResponse.widget?.type === 'html-canvas'
+      ? (aiResponse.widget.params?.html ?? null)
+      : null;
 
     await db.insert(messagesTable).values({
       chatId: activeChatId,
       role: 'assistant',
       content: aiResponse.text,
       widget: aiResponse.widget,
+      widgetHtml,
     });
 
     return Response.json({ ...aiResponse, chatId: activeChatId });

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Chatbot UI · Color Palette Explorer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #EFF2F5;
+            font-family: system-ui, -apple-system, 'Segoe UI', 'Inter', 'Helvetica Neue', sans-serif;
+            padding: 2rem 1.5rem;
+            line-height: 1.4;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* header */
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #1F2A3A, #2C3E50);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: -0.3px;
+        }
+
+        .header p {
+            color: #4A5B6E;
+            margin-top: 0.5rem;
+            font-size: 1.05rem;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* grid layout */
+        .palettes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2.5rem;
+        }
+
+        /* card style */
+        .palette-card {
+            background: white;
+            border-radius: 2rem;
+            box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .palette-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 28px 40px -14px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            padding: 1.2rem 1.5rem;
+            border-bottom: 1px solid #EDEFF2;
+        }
+
+        .card-header h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+        }
+
+        .card-header .tag {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 500;
+            background: #EFF2F8;
+            padding: 0.2rem 0.7rem;
+            border-radius: 20px;
+            margin-top: 0.4rem;
+            color: #2C3E50;
+        }
+
+        /* chat preview area (simulated bubbles) */
+        .chat-preview {
+            padding: 1.8rem 1.5rem;
+            background-size: cover;
+            transition: background 0.2s;
+        }
+
+        /* bubble shared styles */
+        .bubble {
+            max-width: 85%;
+            padding: 0.7rem 1rem;
+            border-radius: 1.5rem;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 1px rgba(0,0,0,0.03);
+        }
+
+        .bubble-user {
+            margin-left: auto;
+            border-bottom-right-radius: 0.3rem;
+        }
+
+        .bubble-bot {
+            margin-right: auto;
+            border-bottom-left-radius: 0.3rem;
+        }
+
+        .message-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.2rem;
+            font-size: 0.65rem;
+            font-weight: 400;
+        }
+
+        .accent-sample {
+            margin-top: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            border-top: 1px dashed rgba(0,0,0,0.08);
+            padding-top: 1rem;
+        }
+
+        .accent-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #F8F9FC;
+            padding: 0.3rem 0.8rem;
+            border-radius: 40px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .color-dot {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .color-palette-footer {
+            background: #F9FAFE;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #EDEFF2;
+            font-size: 0.75rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .hex-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem 0.9rem;
+        }
+
+        .hex-code {
+            font-family: 'SF Mono', monospace;
+            background: #FFFFFF;
+            border-radius: 12px;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.7rem;
+            border: 1px solid #E2E6EC;
+        }
+
+        hr {
+            margin: 1rem 0;
+        }
+
+        .note {
+            background: #FEF7E0;
+            border-radius: 1rem;
+            padding: 1rem 1.5rem;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #6B5A2E;
+            max-width: 780px;
+            margin: 2rem auto 0 auto;
+            border-left: 4px solid #E6B12E;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 2.5rem;
+            font-size: 0.75rem;
+            color: #6C7A8F;
+        }
+
+        @media (max-width: 700px) {
+            body {
+                padding: 1rem;
+            }
+            .bubble {
+                max-width: 92%;
+            }
+            .card-header h2 {
+                font-size: 1.3rem;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🎨 Chatbot · Smart Color Palettes</h1>
+        <p>Three curated schemes for readability, distinction, and personality.<br> 
+        Each set includes background, user/bot bubbles, accent & text colors.</p>
+    </div>
+
+    <div class="palettes-grid">
+        <!-- Palette 1: Calm & Focused (Warm off-white + Sage) -->
+        <div class="palette-card">
+            <div class="card-header">
+                <h2>🌿 Calm & Focused</h2>
+                <div class="tag">✦ productivity · wellness · low eye strain</div>
+            </div>
+            <div class="chat-preview" style="background-color: #F7F6F4;">
+                <!-- user bubble -->
+                <div class="bubble bubble-user" style="background-color: #FFFFFF; color: #1A1D1E; box-shadow: 0 4px 8px rgba(0,0,0,0.02), 0 1px 1px rgba(0,0,0,0.05);">
+                    Hey! Can you help me summarize my notes?
+                    <div class="message-meta" style="color: #A5A299;">you · 12:34 PM</div>
+                </div>
+                <!-- bot bubble -->
+                <div class="bubble bubble-bot" style="background-color: #E9E6DF; color: #2C2A29;">
+                    Of course! I've organized your bullet points into a clean outline. Ready when you are.
+                    <div class="message-meta" style="color: #8A8982;">Assistant · just now</div>
+                </div>
+                <div class="accent-sample">
+                    <span class="accent-chip"><span class="color-dot" style="background: #7C9082;"></span> Accent: #7C9082</span>
+                    <span class="accent-chip"><span class="color-dot" style="background: #A5A299;"></span> Timestamp: #A5A299</span>
+                </div>
+            </div>
+            <div class="color-palette-footer">
+                <div class="hex-group">
+                    <span class="hex-code">BG #F7F6F4</span>
+                    <span class="hex-code">User #FFFFFF</span>
+                    <span class="hex-code">User txt #1A1D1E</span>
+                    <span class="hex-code">Bot #E9E6DF</span>
+                    <span class="hex-code">Bot txt #2C2A29</span>
+                </div>
+                <span style="font-weight: 500;">✨ gentle & grounded</span>
+            </div>
+        </div>
+
+        <!-- Palette 2: Midnight Focus (Developer / late night) -->
+        <div class="palette-card">
+            <div class="card-header">
+                <h2>🌙 Midnight Focus</h2>
+                <div class="tag">⚡ tech · dark mode · high contrast</div>
+            </div>
+            <div class="chat-preview" style="background-color: #1A1C1E;">
+                <!-- user bubble -->
+                <div class="bubble bubble-user" style="background-color: #2D2F33; color: #E8EDF2;">
+                    Could you explain the recursion logic in that function?
+                    <div class="message-meta" style="color: #8A8F9A;">you · 11:47 PM</div>
+                </div>
+                <!-- bot bubble -->
+                <div class="bubble bubble-bot" style="background-color: #1F2226; color: #E8EDF2; border-left: 3px solid #8AB4F8;">
+                    Recursion breaks the problem into smaller calls. Here’s a visual example: base case → recursive step.
+                    <div class="message-meta" style="color: #7C8290;">CodeBot · 11:47 PM</div>
+                </div>
+                <div class="accent-sample">
+                    <span class="accent-chip" style="background:#282B30;"><span class="color-dot" style="background: #8AB4F8;"></span> Highlight: #8AB4F8</span>
+                    <span class="accent-chip" style="background:#282B30;"><span class="color-dot" style="background: #2D2F33;"></span> User bubble #2D2F33</span>
+                </div>
+            </div>
+            <div class="color-palette-footer">
+                <div class="hex-group">
+                    <span class="hex-code">BG #1A1C1E</span>
+                    <span class="hex-code">User #2D2F33</span>
+                    <span class="hex-code">User txt #E8EDF2</span>
+                    <span class="hex-code">Bot #1F2226</span>
+                    <span class="hex-code">Accent #8AB4F8</span>
+                </div>
+                <span style="font-weight: 500;">🔷 subtle blue border on bot</span>
+            </div>
+        </div>
+
+        <!-- Palette 3: Warm & Playful (social / entertainment) -->
+        <div class="palette-card">
+            <div class="card-header">
+                <h2>🍑 Warm & Playful</h2>
+                <div class="tag">🎉 social · human touch · approachable</div>
+            </div>
+            <div class="chat-preview" style="background-color: #FFF9F5;">
+                <!-- user bubble -->
+                <div class="bubble bubble-user" style="background-color: #FFFFFF; color: #4A3B32;">
+                    Tell me a funny joke about coffee! ☕
+                    <div class="message-meta" style="color: #D2B7A2;">you · 3:21 PM</div>
+                </div>
+                <!-- bot bubble -->
+                <div class="bubble bubble-bot" style="background-color: #F0E3D8; color: #4A3B32;">
+                    Why did the coffee file a police report? It got mugged! 😄 Want another one?
+                    <div class="message-meta" style="color: #C4A586;">FunBot · 3:21 PM</div>
+                </div>
+                <div class="accent-sample">
+                    <span class="accent-chip"><span class="color-dot" style="background: #E0A97D;"></span> Accent: #E0A97D</span>
+                    <span class="accent-chip"><span class="color-dot" style="background: #D97954;"></span> Links/CTAs: #D97954</span>
+                </div>
+            </div>
+            <div class="color-palette-footer">
+                <div class="hex-group">
+                    <span class="hex-code">BG #FFF9F5</span>
+                    <span class="hex-code">User #FFFFFF</span>
+                    <span class="hex-code">Bot #F0E3D8</span>
+                    <span class="hex-code">Text #4A3B32</span>
+                    <span class="hex-code">Terracotta #E0A97D</span>
+                </div>
+                <span style="font-weight: 500;">🧡 warm & friendly</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bonus: Role-Reversal Concept (Better UX) -->
+    <div style="margin-top: 1.5rem;">
+        <div class="palette-card" style="max-width: 980px; margin: 0 auto;">
+            <div class="card-header" style="background: #F4F2EF;">
+                <h2 style="font-size: 1.35rem;">💡 "Better Tip" · Role‑reversal principle</h2>
+                <div class="tag">🔁 user as protagonist · bot as subtle sidekick</div>
+            </div>
+            <div class="chat-preview" style="background-color: #F8F6F4; display: flex; flex-direction: column; gap: 0.5rem;">
+                <div style="display: flex; justify-content: flex-end;">
+                    <div style="background-color: #D83A52; color: white; padding: 0.7rem 1rem; border-radius: 1.2rem 1.2rem 0.2rem 1.2rem; max-width: 75%; font-size: 0.85rem;">
+                        ⚡ I just updated my profile. Can you confirm?
+                        <div style="font-size: 0.6rem; opacity: 0.8; margin-top: 0.2rem;">User · now</div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-start;">
+                    <div style="background-color: #F0EEEA; color: #2D2A26; padding: 0.7rem 1rem; border-radius: 1.2rem 1.2rem 1.2rem 0.2rem; max-width: 75%; font-size: 0.85rem;">
+                        ✅ All set! Your new details are saved securely.
+                        <div style="font-size: 0.6rem; color: #8F8B84; margin-top: 0.2rem;">Assistant · just now</div>
+                    </div>
+                </div>
+                <div class="accent-sample" style="border-top-color: #E2DCD5; margin-top: 0.5rem;">
+                    <span class="accent-chip"><span class="color-dot" style="background: #D83A52;"></span> User bubble: brand red #D83A52</span>
+                    <span class="accent-chip"><span class="color-dot" style="background: #F0EEEA;"></span> Bot bubble: neutral #F0EEEA</span>
+                    <span class="hex-code">Effect: user feels like protagonist</span>
+                </div>
+            </div>
+            <div class="color-palette-footer" style="background: #FCFAF7; justify-content: center; gap: 1rem;">
+                <span class="hex-code">💬 stronger identity for user messages</span>
+                <span class="hex-code">🤖 bot fades into background → less noise</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="note">
+        💡 **How to use these palettes**<br>
+        – Apply <strong>Background</strong> to the chat container. <br>
+        – Use <strong>User bubble</strong> for outgoing messages, <strong>Bot bubble</strong> for responses.<br>
+        – Accent colors: buttons, links, timestamps, or avatar borders. Keep it minimal for clarity.
+    </div>
+
+    <footer>
+        🧩 Interactive preview — colors shown represent background, bubbles & typography. <br> 
+        Hex values ready for implementation in your chatbot UI.
+    </footer>
+</div>
+</body>
+</html>
