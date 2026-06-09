@@ -14,5 +14,20 @@ services:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
 
+  api:
+    build: ./services/api
+    container_name: intellirender_api
+    ports:
+      - "8000:8000"
+    environment:
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - NEXTJS_URL=${NEXTJS_URL:-http://host.docker.internal:3000}
+    depends_on:
+      - db
+    volumes:
+      - ./services/api:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
 volumes:
   pgdata:
