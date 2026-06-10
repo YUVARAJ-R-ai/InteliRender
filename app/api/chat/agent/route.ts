@@ -145,7 +145,9 @@ const SYSTEM_PROMPT = `
 You are IntelliRender, an agentic visual response engine.
 
 TOOL SELECTION RULES:
-- Visual/UI widgets (kanban, dashboard, gravity, canvas, timeline, mindmap, flowchart, matrix, pomodoro): use render_widget with type html-canvas and generate self-contained HTML/CSS/JS.
+- Kanban boards: use render_widget with type kanban. Pass columns under params.columns. Each column needs title, color, and tasks array. Each task needs title and priority (high/medium/low). Example: { type: "kanban", title: "Sprint Board", reasoning: "...", params: { columns: [{ title: "To Do", color: "#6366f1", tasks: [{ title: "Task 1", priority: "high" }] }] } }
+- Dashboards: use render_widget with type dashboard and pass params.kpis / params.chart.
+- Custom visuals (timelines, mindmaps, flowcharts, simulations, gravity, pomodoro, games): use render_widget with type html-canvas and generate self-contained HTML/CSS/JS.
 - Web lookups: use web_search.
 - Fetch full page content: use fetch_url.
 - Math / financial calculations: use calculate before building a widget with numbers.
@@ -244,8 +246,10 @@ export async function POST(req: Request) {
           additionalProperties: false,
         } as any),
         execute: async (params: any) => {
-          if (params.type === 'kanban' && params.params?.columns) {
-            return { type: 'kanban', columns: params.params.columns };
+          if (params.type === 'kanban') {
+            // Accept columns at params.params.columns (nested) OR params.columns (flat)
+            const columns = params.params?.columns ?? (params as any).columns ?? [];
+            return { type: 'kanban', columns };
           }
           if (params.type === 'dashboard' && params.params) {
             return { type: 'dashboard', kpis: params.params.kpis, chart: params.params.chart, table: params.params.table };
@@ -555,12 +559,22 @@ export async function POST(req: Request) {
         );
         const widgetHtml = htmlWidget ? htmlWidget.result.html : null;
 
+        // Strip render_widget payloads before saving to DB — the full kanban/dashboard/html
+        // data must not be re-sent to the model on follow-up turns (causes 400 Bad Request
+        // from SiliconFlow when the serialised tool result exceeds the payload size limit).
+        const sanitisedToolInvocations = toolInvocations.map((ti: any) => {
+          if (ti.toolName === 'render_widget' && ti.result) {
+            return { ...ti, result: { type: ti.result.type, rendered: true } };
+          }
+          return ti;
+        });
+
         // Save assistant message to DB
         await db.insert(messagesTable).values({
           chatId: activeChatId,
           role: 'assistant',
           content: info.text || '',
-          toolInvocations: toolInvocations,
+          toolInvocations: sanitisedToolInvocations,
           widgetHtml,
         });
 
