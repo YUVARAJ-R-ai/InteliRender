@@ -149,6 +149,7 @@ TOOL SELECTION RULES:
 - Dashboards: use render_widget with type dashboard and pass params.kpis / params.chart.
 - Custom visuals (timelines, mindmaps, flowcharts, simulations, gravity, pomodoro, games): use render_widget with type html-canvas and generate self-contained HTML/CSS/JS.
 - Web lookups: use web_search.
+- Browser automation (open a website, log in, fill a form, scrape a page, click buttons): use browser_task. When credentials are needed, ask the user for them in-chat first and explain they are used only for this session and never stored.
 - Fetch full page content: use fetch_url.
 - Math / financial calculations: use calculate before building a widget with numbers.
 - Export data as CSV: use generate_csv, then reply with the returned dataUrl as a markdown download link.
@@ -307,6 +308,62 @@ export async function POST(req: Request) {
             return data.results.map((r: any) => ({ title: r.title, snippet: r.text || r.snippet }));
           } catch (err) {
             return [{ title: "Error", snippet: "Search failed to execute." }];
+          }
+        }
+      } as any),
+      browser_task: tool({
+        description: 'Control a real browser to perform web tasks: navigate to URLs, click elements, fill forms, extract text, take screenshots. Use when the user asks to open, browse, log in to, scrape, or automate a website. Ask the user for credentials in-chat when required — they are passed per-request and never stored.',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            url:   { type: 'string', description: 'The starting URL' },
+            task:  { type: 'string', description: 'Plain-English description of what to do' },
+            steps: {
+              type: 'array',
+              description: 'Ordered list of browser actions',
+              items: {
+                type: 'object',
+                properties: {
+                  action:   { type: 'string', enum: ['click','fill','wait','extract','submit'], description: 'Action to perform' },
+                  selector: { type: 'string', description: 'CSS selector for the target element' },
+                  value:    { type: 'string', description: 'Value for fill action' },
+                },
+                required: ['action'],
+                additionalProperties: false,
+              },
+            },
+            credentials: {
+              type: 'object',
+              description: 'Login credentials — only include when the user explicitly provided them',
+              properties: {
+                username: { type: 'string' },
+                password: { type: 'string' },
+              },
+              required: ['username', 'password'],
+              additionalProperties: false,
+            },
+          },
+          required: ['url', 'task'],
+          additionalProperties: false,
+        } as any),
+        execute: async (params: any) => {
+          const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
+          try {
+            const res = await fetch(`${fastApiUrl}/api/v1/browser/run`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(params),
+              signal: AbortSignal.timeout(65_000),
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({ detail: res.statusText }));
+              return { error: err.detail || 'Browser task failed' };
+            }
+            const data = await res.json();
+            // Strip screenshot from agent context — too large for model context
+            return { result: data.result, has_screenshot: !!data.screenshot };
+          } catch (err: any) {
+            return { error: err.message || 'Browser task failed' };
           }
         }
       } as any),
@@ -565,6 +622,10 @@ export async function POST(req: Request) {
         const sanitisedToolInvocations = toolInvocations.map((ti: any) => {
           if (ti.toolName === 'render_widget' && ti.result) {
             return { ...ti, result: { type: ti.result.type, rendered: true } };
+          }
+          if (ti.toolName === 'browser_task' && ti.result) {
+            // Strip screenshot (base64) from DB — only keep the text result
+            return { ...ti, result: { result: ti.result.result, has_screenshot: ti.result.has_screenshot } };
           }
           return ti;
         });
