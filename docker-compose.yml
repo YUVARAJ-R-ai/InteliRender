@@ -1,33 +1,72 @@
 version: '3.8'
 
+networks:
+  app_network:
+    driver: bridge
+
 services:
   db:
     image: postgres:15-alpine
     container_name: intellirender_db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: intellirender
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-intellirender}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - app_network
     restart: unless-stopped
 
   api:
     build: ./services/api
     container_name: intellirender_api
-    ports:
-      - "8000:8000"
     environment:
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-      - NEXTJS_URL=${NEXTJS_URL:-http://host.docker.internal:3000}
+      - NEXTJS_URL=http://frontend:3000
     depends_on:
       - db
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      target: runner
+    container_name: intellirender_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/intellirender}
+      - FASTAPI_URL=http://api:8000
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    depends_on:
+      - db
+      - api
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.50.0-noble
+    container_name: intellirender_playwright
+    command: ["sleep", "infinity"]
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: intellirender_redis
     volumes:
-      - ./services/api:/app
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      - redis_data:/data
+    networks:
+      - app_network
     restart: unless-stopped
 
 volumes:
   pgdata:
+  redis_data:
