@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import health
+from routers import health, browser
 
 app = FastAPI(title="IntelliRender API", version="0.1.0")
 
@@ -14,3 +14,4 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix="/api/v1")
+app.include_router(browser.router, prefix="/api/v1")
