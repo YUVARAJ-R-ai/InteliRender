@@ -196,7 +196,7 @@ export async function POST(req: Request) {
   // Maps server name → connected client so compound tools can reuse them
   const mcpClientMap: Record<string, Client> = {};
   try {
-    const { messages, chatId, mcpServers } = await req.json();
+    const { messages, chatId, mcpServers, model } = await req.json();
 
     // Inject per-user SiliconFlow API key from DB (falls back to env if not set)
     const session = await auth();
@@ -610,7 +610,7 @@ export async function POST(req: Request) {
     const sdkMessages = await convertToModelMessages(sanitisedMessages);
 
     const result = streamText({
-      model: getModel(apiKey),
+      model: getModel(apiKey, model),
       messages: sdkMessages,
       system: SYSTEM_PROMPT,
       // AI SDK v6 replaced `maxSteps` with `stopWhen`. Without this the model
