@@ -249,7 +249,12 @@ export async function POST(req: Request) {
         execute: async (params: any) => {
           if (params.type === 'kanban') {
             // Accept columns at params.params.columns (nested) OR params.columns (flat)
-            const columns = params.params?.columns ?? (params as any).columns ?? [];
+            const rawColumns: any[] = params.params?.columns ?? (params as any).columns ?? [];
+            // Normalise the tasks key — model may use items/cards/todos instead of tasks
+            const columns = rawColumns.map((col: any) => ({
+              ...col,
+              tasks: col.tasks ?? col.items ?? col.cards ?? col.todos ?? [],
+            }));
             return { type: 'kanban', columns };
           }
           if (params.type === 'dashboard' && params.params) {
@@ -584,7 +589,25 @@ export async function POST(req: Request) {
       }
     }
 
-    const sdkMessages = await convertToModelMessages(messages);
+    // Strip large render_widget results from message history before sending to the model.
+    // useChat includes previous turns' full tool results (kanban columns, html, etc.)
+    // in every follow-up request — these exceed SiliconFlow's payload limit → 400 Bad Request.
+    const sanitisedMessages = messages.map((msg: any) => {
+      if (!msg.toolInvocations?.length) return msg;
+      return {
+        ...msg,
+        toolInvocations: msg.toolInvocations.map((ti: any) => {
+          if (ti.toolName === 'render_widget' && ti.result && ti.state === 'result') {
+            return { ...ti, result: { type: ti.result.type, rendered: true } };
+          }
+          if (ti.toolName === 'browser_task' && ti.result && ti.state === 'result') {
+            return { ...ti, result: { result: ti.result.result, has_screenshot: ti.result.has_screenshot } };
+          }
+          return ti;
+        }),
+      };
+    });
+    const sdkMessages = await convertToModelMessages(sanitisedMessages);
 
     const result = streamText({
       model: getModel(apiKey),
