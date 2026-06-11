@@ -149,8 +149,8 @@ TOOL SELECTION RULES:
 - Dashboards: use render_widget with type dashboard and pass params.kpis / params.chart.
 - Custom visuals (timelines, mindmaps, flowcharts, simulations, gravity, pomodoro, games): use render_widget with type html-canvas and generate self-contained HTML/CSS/JS.
 - Web lookups: use web_search.
-- Browser automation (open a website, log in, fill a form, scrape a page, click buttons): use browser_task. When credentials are needed, ask the user for them in-chat first and explain they are used only for this session and never stored.
-- Fetch full page content: use fetch_url.
+- Browser automation: use browser_task whenever the user says "open", "go to", "visit", "log in to", "click", "fill", or "scrape" a website — ANY request to interact with or look at a live page in a browser. When credentials are needed, ask the user for them in-chat first and explain they are used only for this session and never stored.
+- Fetch full page content: use fetch_url ONLY when the user asks to read/summarize the text of an article or documentation page and no interaction is needed. If the request says open/go to/visit a site, that is browser_task — never fetch_url.
 - Math / financial calculations: use calculate before building a widget with numbers.
 - Export data as CSV: use generate_csv, then reply with the returned dataUrl as a markdown download link.
 - Complex reasoning: use think before acting.
@@ -317,7 +317,7 @@ export async function POST(req: Request) {
         }
       } as any),
       browser_task: tool({
-        description: 'Control a real browser to perform web tasks: navigate to URLs, click elements, fill forms, extract text, take screenshots. Use when the user asks to open, browse, log in to, scrape, or automate a website. Ask the user for credentials in-chat when required — they are passed per-request and never stored.',
+        description: 'Control a real browser to perform web tasks: navigate to URLs, click elements, fill forms, extract text, take screenshots. ALWAYS use this when the user says open, go to, visit, browse, log in to, scrape, or automate a website — even if they only want the page title or content. Ask the user for credentials in-chat when required — they are passed per-request and never stored.',
         inputSchema: jsonSchema({
           type: 'object',
           properties: {
@@ -368,7 +368,17 @@ export async function POST(req: Request) {
             // Strip screenshot from agent context — too large for model context
             return { result: data.result, has_screenshot: !!data.screenshot };
           } catch (err: any) {
-            return { error: err.message || 'Browser task failed' };
+            const msg = String(err?.message ?? err);
+            const cause = String((err?.cause as any)?.code ?? '');
+            if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+              return { error: 'Browser task timed out after 65s — the page may be too slow or the task too complex.' };
+            }
+            if (cause === 'ECONNREFUSED' || msg.includes('fetch failed')) {
+              return {
+                error: `Browser service is not running at ${fastApiUrl}. Start it with \`docker compose up api\` (or \`make dev\`) and try again.`,
+              };
+            }
+            return { error: msg || 'Browser task failed' };
           }
         }
       } as any),
@@ -388,7 +398,7 @@ export async function POST(req: Request) {
       } as any),
 
       fetch_url: tool({
-        description: 'Fetch the text content of a URL. Use for reading web pages, articles, or documentation.',
+        description: 'Fetch the raw text of a static page when the user asks to read or summarize an article/documentation and no browser interaction is needed. NEVER use this when the user says open, go to, visit, log in, or click — those are browser_task.',
         inputSchema: jsonSchema({
           type: 'object',
           properties: {
@@ -603,6 +613,9 @@ export async function POST(req: Request) {
           if (ti.toolName === 'browser_task' && ti.result && ti.state === 'result') {
             return { ...ti, result: { result: ti.result.result, has_screenshot: ti.result.has_screenshot } };
           }
+          if (ti.toolName === 'fetch_url' && ti.result?.text && ti.state === 'result') {
+            return { ...ti, result: { url: ti.result.url, text: ti.result.text.slice(0, 500), truncated: true } };
+          }
           return ti;
         }),
       };
@@ -679,6 +692,11 @@ export async function POST(req: Request) {
           if (ti.toolName === 'browser_task' && ti.result) {
             // Strip screenshot (base64) from DB — only keep the text result
             return { ...ti, result: { result: ti.result.result, has_screenshot: ti.result.has_screenshot } };
+          }
+          if (ti.toolName === 'fetch_url' && ti.result?.text) {
+            // Keep only an excerpt — the full 8000-char page text re-sent on
+            // follow-up turns exceeds SiliconFlow's payload limit (400 Bad Request)
+            return { ...ti, result: { url: ti.result.url, text: ti.result.text.slice(0, 500), truncated: true } };
           }
           return ti;
         });
