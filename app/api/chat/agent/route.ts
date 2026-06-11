@@ -619,17 +619,31 @@ export async function POST(req: Request) {
       stopWhen: stepCountIs(15),
       tools: dynamicTools,
       onFinish: async (info: any) => {
-        // Construct toolInvocations array
-        const toolInvocations = info.toolCalls?.map((call: any) => {
-          const result = info.toolResults?.find((r: any) => r.toolCallId === call.toolCallId);
+        // Aggregate tool calls/results across ALL steps. The top-level
+        // info.toolCalls only holds the FINAL step's calls — a multi-step agent
+        // that renders a widget in step 1 then writes a summary in a later step
+        // would otherwise lose the widget entirely (final step has no tool calls).
+        // AI SDK v6 also renamed the fields: tool calls use `.input` (was `.args`)
+        // and results use `.output` (was `.result`).
+        const allToolCalls: any[] = [];
+        const allToolResults: any[] = [];
+        for (const step of (info.steps ?? [])) {
+          if (step.toolCalls) allToolCalls.push(...step.toolCalls);
+          if (step.toolResults) allToolResults.push(...step.toolResults);
+        }
+        if (allToolCalls.length === 0 && info.toolCalls) allToolCalls.push(...info.toolCalls);
+        if (allToolResults.length === 0 && info.toolResults) allToolResults.push(...info.toolResults);
+
+        const toolInvocations = allToolCalls.map((call: any) => {
+          const res = allToolResults.find((r: any) => r.toolCallId === call.toolCallId);
           return {
             state: 'result',
             toolCallId: call.toolCallId,
             toolName: call.toolName,
-            args: call.args,
-            result: result ? result.result : undefined
+            args: call.input,
+            result: res ? res.output : undefined,
           };
-        }) || [];
+        });
 
         // Extract the full HTML of any generated html-canvas widget so it can be
         // re-rendered after reload. Only the completed result is read here (onFinish),

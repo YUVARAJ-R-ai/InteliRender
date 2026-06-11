@@ -139,7 +139,8 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
 
     setMessages(prev => {
       const prevById = new Map(prev.map(p => [p.id, p]));
-      return agentMessages.map((m) => {
+      let changed = prev.length !== agentMessages.length;
+      const next = agentMessages.map((m) => {
         const content = m.parts
           ?.filter((part: any) => part.type === 'text')
           .map((part: any) => part.text)
@@ -198,6 +199,7 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
           return prevMsg;
         }
 
+        changed = true;
         return {
           id: m.id,
           role: m.role as 'user' | 'assistant',
@@ -207,6 +209,12 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
           toolInvocations: toolsUnchanged ? prevMsg!.toolInvocations : toolInvocations,
         };
       });
+
+      // CRITICAL: if nothing changed, return the SAME array reference so React
+      // bails out of the re-render. useChat returns a new agentMessages reference
+      // on every render, so without this guard the effect → setMessages → re-render
+      // → effect cycle never settles ("Maximum update depth exceeded").
+      return changed ? next : prev;
     });
   }, [agentMessages, isAgentMode, agentStatus]);
 
