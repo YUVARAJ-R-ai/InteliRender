@@ -9,6 +9,7 @@ import { UserMenu } from '@/components/UserMenu';
 import { useChat } from '@ai-sdk/react';
 import { BUILTIN_SKILLS, Skill } from '@/lib/skills';
 import { DefaultChatTransport } from 'ai';
+import { CHAT_MODELS, DEFAULT_CHAT_MODEL_ID } from '@/lib/ai';
 
 interface ChatWindowProps {
   chatId: number | null;
@@ -23,13 +24,20 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
   
   // Agent Mode State
   const [isAgentMode, setIsAgentMode] = useState(false);
-  
+
+  // Selected chat model (id from CHAT_MODELS). Persisted in localStorage.
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_CHAT_MODEL_ID);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+
   // Mention State
   const [mentionState, setMentionState] = useState<{ query: string; index: number } | null>(null);
   const [selectedMentionIdx, setSelectedMentionIdx] = useState(0);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Mirror of selectedModel so the memoized agent transport body callback can
+  // read the latest value without the transport being recreated.
+  const selectedModelRef = useRef(selectedModel);
 
   // Refs so the memoized transport can always read the latest values without
   // being recreated (recreation every render is the root cause of both bugs).
@@ -58,6 +66,11 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
     if (typeof window !== 'undefined') {
       const mode = localStorage.getItem('chat_mode');
       if (mode === 'agent') setIsAgentMode(true);
+      const storedModel = localStorage.getItem('chat_model');
+      if (storedModel && CHAT_MODELS.some((m) => m.id === storedModel)) {
+        setSelectedModel(storedModel);
+        selectedModelRef.current = storedModel;
+      }
     }
   }, []);
 
@@ -65,6 +78,14 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
   const toggleAgentMode = (val: boolean) => {
     setIsAgentMode(val);
     localStorage.setItem('chat_mode', val ? 'agent' : 'standard');
+  };
+
+  // Sync model choice (also updates the ref read by the agent transport)
+  const chooseModel = (id: string) => {
+    setSelectedModel(id);
+    selectedModelRef.current = id;
+    localStorage.setItem('chat_model', id);
+    setModelMenuOpen(false);
   };
 
   // Created once — uses refs so it never needs to be recreated when chatId or
@@ -75,6 +96,7 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
     api: '/api/chat/agent',
     body: () => ({
       chatId: chatIdRef.current,
+      model: selectedModelRef.current,
       mcpServers: typeof window !== 'undefined'
         ? JSON.parse(localStorage.getItem('mcp_servers') || '[]').filter((s: any) => s.isEnabled)
         : []
@@ -451,9 +473,10 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             messages: prunedMessages,
             chatId,
+            model: selectedModel,
           }),
         });
 
@@ -511,9 +534,10 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             messages: newMessages,
             chatId,
+            model: selectedModel,
           }),
         });
 
@@ -839,13 +863,39 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
 
             {/* ── RIGHT: model selector + send ── */}
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                className="flex items-center gap-1 text-[#6B7280] hover:text-[#C8CDD3] text-[0.7rem] font-medium transition-colors duration-150 cursor-pointer select-none"
-              >
-                DeepSeek-V4-Flash
-                <ChevronDown className="w-3 h-3" />
-              </button>
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setModelMenuOpen((o) => !o)}
+                  className="flex items-center gap-1 text-[#6B7280] hover:text-[#C8CDD3] text-[0.7rem] font-medium transition-colors duration-150 cursor-pointer select-none"
+                >
+                  {CHAT_MODELS.find((m) => m.id === selectedModel)?.label ?? selectedModel}
+                  <ChevronDown className={`w-3 h-3 transition-transform ${modelMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {modelMenuOpen && (
+                  <>
+                    {/* click-away backdrop */}
+                    <div className="fixed inset-0 z-40" onClick={() => setModelMenuOpen(false)} />
+                    <div className="absolute bottom-full right-0 mb-2 z-50 min-w-[180px] bg-[#1a1a1a] border border-[#3a3a3a] rounded-lg shadow-xl py-1">
+                      {CHAT_MODELS.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => chooseModel(m.id)}
+                          className={`w-full text-left px-3 py-1.5 text-[0.72rem] transition-colors ${
+                            m.id === selectedModel
+                              ? 'text-[#8AB4F8] bg-[rgba(138,180,248,0.08)]'
+                              : 'text-[#C8CDD3] hover:bg-[#242424]'
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
 
               <button
                 type="submit"
