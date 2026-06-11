@@ -128,60 +128,78 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
   // Sync messages from useChat only while the agent is actively generating.
   // Skipping when status === 'ready' prevents the DB-seeded agentMessages from
   // overwriting freshly loaded messages on chat switch (Pattern C/D feedback loop).
+  //
+  // Uses functional setState + stable-reference reuse: if a message's content and
+  // tool-invocation states haven't changed since the last render, the same object
+  // reference is returned. Combined with React.memo on MessageBubble this means
+  // only the actively-streaming message re-renders on each token — preventing
+  // cascading re-renders into third-party class components (Maximum update depth).
   useEffect(() => {
-    if (isAgentMode && (agentStatus === 'submitted' || agentStatus === 'streaming') && agentMessages.length > 0) {
-      setMessages(
-        agentMessages.map((m) => {
-          const content = m.parts
-            ?.filter((part: any) => part.type === 'text')
-            .map((part: any) => part.text)
-            .join('\n') || '';
+    if (!isAgentMode || (agentStatus !== 'submitted' && agentStatus !== 'streaming') || agentMessages.length === 0) return;
 
-          const toolInvocations: any[] = m.parts
-            ?.filter((part: any) => part.type.startsWith('tool-') || part.type === 'dynamic-tool')
-            .map((part: any) => {
-              let toolName = part.toolName;
-              if (!toolName && part.type.startsWith('tool-')) {
-                toolName = part.type.substring(5);
-              }
-              
-              let state: 'call' | 'result' = 'call';
-              if (part.state === 'output-available' || part.state === 'output-error') {
-                state = 'result';
-              }
-              
-              return {
-                state,
-                toolCallId: part.toolCallId,
-                toolName,
-                args: part.input,
-                result: part.output || part.errorText
-              };
-            }) || [];
+    setMessages(prev => {
+      const prevById = new Map(prev.map(p => [p.id, p]));
+      return agentMessages.map((m) => {
+        const content = m.parts
+          ?.filter((part: any) => part.type === 'text')
+          .map((part: any) => part.text)
+          .join('\n') || '';
 
-          // Include reasoning parts as a mock think tool call so MessageBubble displays it
-          const reasoningParts = m.parts?.filter((part: any) => part.type === 'reasoning');
-          if (reasoningParts && reasoningParts.length > 0) {
-            const thought = reasoningParts.map((p: any) => p.text).join('\n');
-            toolInvocations.unshift({
-              state: 'result',
-              toolCallId: 'reasoning-' + m.id,
-              toolName: 'think',
-              args: { thought },
-              result: { thought, acknowledged: true }
-            });
-          }
+        const toolInvocations: any[] = m.parts
+          ?.filter((part: any) => part.type.startsWith('tool-') || part.type === 'dynamic-tool')
+          .map((part: any) => {
+            let toolName = part.toolName;
+            if (!toolName && part.type.startsWith('tool-')) {
+              toolName = part.type.substring(5);
+            }
+            const state: 'call' | 'result' =
+              (part.state === 'output-available' || part.state === 'output-error') ? 'result' : 'call';
+            return {
+              state,
+              toolCallId: part.toolCallId,
+              toolName,
+              args: part.input,
+              result: part.output || part.errorText
+            };
+          }) || [];
 
-          return {
-            id: m.id,
-            role: m.role as 'user' | 'assistant',
-            content,
-            createdAt: (m.metadata as any)?.createdAt || new Date().toISOString(),
-            toolInvocations
-          };
-        })
-      );
-    }
+        // Include reasoning parts as a mock think tool call so MessageBubble displays it
+        const reasoningParts = m.parts?.filter((part: any) => part.type === 'reasoning');
+        if (reasoningParts && reasoningParts.length > 0) {
+          const thought = reasoningParts.map((p: any) => p.text).join('\n');
+          toolInvocations.unshift({
+            state: 'result',
+            toolCallId: 'reasoning-' + m.id,
+            toolName: 'think',
+            args: { thought },
+            result: { thought, acknowledged: true }
+          });
+        }
+
+        // Reuse previous object reference if nothing has changed.
+        const prevMsg = prevById.get(m.id);
+        if (
+          prevMsg &&
+          prevMsg.content === content &&
+          (prevMsg.toolInvocations?.length ?? 0) === toolInvocations.length &&
+          toolInvocations.every(
+            (ti, i) =>
+              prevMsg.toolInvocations![i]?.toolCallId === ti.toolCallId &&
+              prevMsg.toolInvocations![i]?.state === ti.state
+          )
+        ) {
+          return prevMsg;
+        }
+
+        return {
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content,
+          createdAt: (m.metadata as any)?.createdAt || new Date().toISOString(),
+          toolInvocations,
+        };
+      });
+    });
   }, [agentMessages, isAgentMode, agentStatus]);
 
   // Load chat messages from DB when chatId changes

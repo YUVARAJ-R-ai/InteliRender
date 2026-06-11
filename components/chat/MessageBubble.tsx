@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, memo } from 'react';
 import { ChatMessage } from '@/types/widget';
 import { WidgetRenderer } from '@/components/widgets/WidgetRenderer';
 import { Trash2, Copy, Check, ThumbsUp, ThumbsDown, RotateCw } from 'lucide-react';
@@ -41,7 +41,7 @@ interface MessageBubbleProps {
   isLastInGroup?: boolean;
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   message,
   onDelete,
   onRegenerate,
@@ -345,4 +345,12 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+// Only re-render when the message object reference changes or grouping flags change.
+// During streaming, the ChatWindow stable-ref optimisation ensures unchanged messages
+// keep the same reference, so this bailout prevents them from cascading re-renders
+// into internal class-component state updates (e.g. third-party libraries).
+}, (prev, next) =>
+  prev.message === next.message &&
+  prev.isFirstInGroup === next.isFirstInGroup &&
+  prev.isLastInGroup === next.isLastInGroup
+);
