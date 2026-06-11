@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Widget } from '@/types/widget';
 import { KanbanBoard } from './KanbanBoard';
 import { ChartDashboard } from './ChartDashboard';
@@ -25,7 +26,11 @@ const WIDGET_REGISTRY: Record<Widget['type'], React.FC<any>> = {
   'network-graph': NetworkGraphWidget,
 };
 
-export function WidgetRenderer({ widget }: { widget: Widget }) {
+// Memoised so the widget subtree (and any stateful/animated children like the
+// framer-motion KanbanBoard) does NOT re-render while the parent MessageBubble
+// re-renders on each streaming text token. Only a change to the `widget`
+// reference itself triggers a re-render — see ChatWindow's stable-ref sync.
+export const WidgetRenderer = memo(function WidgetRenderer({ widget }: { widget: Widget }) {
   if (!widget?.type) return null;
 
   const Component = WIDGET_REGISTRY[widget.type];
@@ -41,4 +46,4 @@ export function WidgetRenderer({ widget }: { widget: Widget }) {
   if (!widget.params) return null;
 
   return <Component params={widget.params} />;
-}
+});

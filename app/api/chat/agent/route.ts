@@ -249,7 +249,12 @@ export async function POST(req: Request) {
         execute: async (params: any) => {
           if (params.type === 'kanban') {
             // Accept columns at params.params.columns (nested) OR params.columns (flat)
-            const columns = params.params?.columns ?? (params as any).columns ?? [];
+            const rawColumns: any[] = params.params?.columns ?? (params as any).columns ?? [];
+            // Normalise the tasks key — model may use items/cards/todos instead of tasks
+            const columns = rawColumns.map((col: any) => ({
+              ...col,
+              tasks: col.tasks ?? col.items ?? col.cards ?? col.todos ?? [],
+            }));
             return { type: 'kanban', columns };
           }
           if (params.type === 'dashboard' && params.params) {
@@ -584,7 +589,25 @@ export async function POST(req: Request) {
       }
     }
 
-    const sdkMessages = await convertToModelMessages(messages);
+    // Strip large render_widget results from message history before sending to the model.
+    // useChat includes previous turns' full tool results (kanban columns, html, etc.)
+    // in every follow-up request — these exceed SiliconFlow's payload limit → 400 Bad Request.
+    const sanitisedMessages = messages.map((msg: any) => {
+      if (!msg.toolInvocations?.length) return msg;
+      return {
+        ...msg,
+        toolInvocations: msg.toolInvocations.map((ti: any) => {
+          if (ti.toolName === 'render_widget' && ti.result && ti.state === 'result') {
+            return { ...ti, result: { type: ti.result.type, rendered: true } };
+          }
+          if (ti.toolName === 'browser_task' && ti.result && ti.state === 'result') {
+            return { ...ti, result: { result: ti.result.result, has_screenshot: ti.result.has_screenshot } };
+          }
+          return ti;
+        }),
+      };
+    });
+    const sdkMessages = await convertToModelMessages(sanitisedMessages);
 
     const result = streamText({
       model: getModel(apiKey),
@@ -596,17 +619,31 @@ export async function POST(req: Request) {
       stopWhen: stepCountIs(15),
       tools: dynamicTools,
       onFinish: async (info: any) => {
-        // Construct toolInvocations array
-        const toolInvocations = info.toolCalls?.map((call: any) => {
-          const result = info.toolResults?.find((r: any) => r.toolCallId === call.toolCallId);
+        // Aggregate tool calls/results across ALL steps. The top-level
+        // info.toolCalls only holds the FINAL step's calls — a multi-step agent
+        // that renders a widget in step 1 then writes a summary in a later step
+        // would otherwise lose the widget entirely (final step has no tool calls).
+        // AI SDK v6 also renamed the fields: tool calls use `.input` (was `.args`)
+        // and results use `.output` (was `.result`).
+        const allToolCalls: any[] = [];
+        const allToolResults: any[] = [];
+        for (const step of (info.steps ?? [])) {
+          if (step.toolCalls) allToolCalls.push(...step.toolCalls);
+          if (step.toolResults) allToolResults.push(...step.toolResults);
+        }
+        if (allToolCalls.length === 0 && info.toolCalls) allToolCalls.push(...info.toolCalls);
+        if (allToolResults.length === 0 && info.toolResults) allToolResults.push(...info.toolResults);
+
+        const toolInvocations = allToolCalls.map((call: any) => {
+          const res = allToolResults.find((r: any) => r.toolCallId === call.toolCallId);
           return {
             state: 'result',
             toolCallId: call.toolCallId,
             toolName: call.toolName,
-            args: call.args,
-            result: result ? result.result : undefined
+            args: call.input,
+            result: res ? res.output : undefined,
           };
-        }) || [];
+        });
 
         // Extract the full HTML of any generated html-canvas widget so it can be
         // re-rendered after reload. Only the completed result is read here (onFinish),
@@ -615,6 +652,22 @@ export async function POST(req: Request) {
           (ti: any) => ti.toolName === 'render_widget' && ti.result?.type === 'html-canvas' && ti.result?.html
         );
         const widgetHtml = htmlWidget ? htmlWidget.result.html : null;
+
+        // Persist structured widgets (kanban/dashboard/treemap/etc.) so they can be
+        // re-rendered after a reload. The full result is kept in the dedicated
+        // `widget` column (NOT in toolInvocations, which is sanitised below and re-sent
+        // to the model). Shape matches MessageBubble's live-render path:
+        // { type, params: <full tool result> }. html-canvas is handled via widgetHtml.
+        const structuredWidgetCall = toolInvocations.find(
+          (ti: any) =>
+            ti.toolName === 'render_widget' &&
+            ti.result?.type &&
+            ti.result.type !== 'html-canvas' &&
+            ti.result.type !== 'text'
+        );
+        const widget = structuredWidgetCall
+          ? { type: structuredWidgetCall.result.type, params: structuredWidgetCall.result }
+          : null;
 
         // Strip render_widget payloads before saving to DB — the full kanban/dashboard/html
         // data must not be re-sent to the model on follow-up turns (causes 400 Bad Request
@@ -636,6 +689,7 @@ export async function POST(req: Request) {
           role: 'assistant',
           content: info.text || '',
           toolInvocations: sanitisedToolInvocations,
+          widget,
           widgetHtml,
         });
 

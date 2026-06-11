@@ -128,60 +128,94 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
   // Sync messages from useChat only while the agent is actively generating.
   // Skipping when status === 'ready' prevents the DB-seeded agentMessages from
   // overwriting freshly loaded messages on chat switch (Pattern C/D feedback loop).
+  //
+  // Uses functional setState + stable-reference reuse: if a message's content and
+  // tool-invocation states haven't changed since the last render, the same object
+  // reference is returned. Combined with React.memo on MessageBubble this means
+  // only the actively-streaming message re-renders on each token — preventing
+  // cascading re-renders into third-party class components (Maximum update depth).
   useEffect(() => {
-    if (isAgentMode && (agentStatus === 'submitted' || agentStatus === 'streaming') && agentMessages.length > 0) {
-      setMessages(
-        agentMessages.map((m) => {
-          const content = m.parts
-            ?.filter((part: any) => part.type === 'text')
-            .map((part: any) => part.text)
-            .join('\n') || '';
+    if (!isAgentMode || (agentStatus !== 'submitted' && agentStatus !== 'streaming') || agentMessages.length === 0) return;
 
-          const toolInvocations: any[] = m.parts
-            ?.filter((part: any) => part.type.startsWith('tool-') || part.type === 'dynamic-tool')
-            .map((part: any) => {
-              let toolName = part.toolName;
-              if (!toolName && part.type.startsWith('tool-')) {
-                toolName = part.type.substring(5);
-              }
-              
-              let state: 'call' | 'result' = 'call';
-              if (part.state === 'output-available' || part.state === 'output-error') {
-                state = 'result';
-              }
-              
-              return {
-                state,
-                toolCallId: part.toolCallId,
-                toolName,
-                args: part.input,
-                result: part.output || part.errorText
-              };
-            }) || [];
+    setMessages(prev => {
+      const prevById = new Map(prev.map(p => [p.id, p]));
+      let changed = prev.length !== agentMessages.length;
+      const next = agentMessages.map((m) => {
+        const content = m.parts
+          ?.filter((part: any) => part.type === 'text')
+          .map((part: any) => part.text)
+          .join('\n') || '';
 
-          // Include reasoning parts as a mock think tool call so MessageBubble displays it
-          const reasoningParts = m.parts?.filter((part: any) => part.type === 'reasoning');
-          if (reasoningParts && reasoningParts.length > 0) {
-            const thought = reasoningParts.map((p: any) => p.text).join('\n');
-            toolInvocations.unshift({
-              state: 'result',
-              toolCallId: 'reasoning-' + m.id,
-              toolName: 'think',
-              args: { thought },
-              result: { thought, acknowledged: true }
-            });
-          }
+        const toolInvocations: any[] = m.parts
+          ?.filter((part: any) => part.type.startsWith('tool-') || part.type === 'dynamic-tool')
+          .map((part: any) => {
+            let toolName = part.toolName;
+            if (!toolName && part.type.startsWith('tool-')) {
+              toolName = part.type.substring(5);
+            }
+            const state: 'call' | 'result' =
+              (part.state === 'output-available' || part.state === 'output-error') ? 'result' : 'call';
+            return {
+              state,
+              toolCallId: part.toolCallId,
+              toolName,
+              args: part.input,
+              result: part.output || part.errorText
+            };
+          }) || [];
 
-          return {
-            id: m.id,
-            role: m.role as 'user' | 'assistant',
-            content,
-            createdAt: (m.metadata as any)?.createdAt || new Date().toISOString(),
-            toolInvocations
-          };
-        })
-      );
-    }
+        // Include reasoning parts as a mock think tool call so MessageBubble displays it
+        const reasoningParts = m.parts?.filter((part: any) => part.type === 'reasoning');
+        if (reasoningParts && reasoningParts.length > 0) {
+          const thought = reasoningParts.map((p: any) => p.text).join('\n');
+          toolInvocations.unshift({
+            state: 'result',
+            toolCallId: 'reasoning-' + m.id,
+            toolName: 'think',
+            args: { thought },
+            result: { thought, acknowledged: true }
+          });
+        }
+
+        // Reuse previous references where possible. Tool invocations are compared
+        // by toolCallId + state: if unchanged we keep the SAME array reference even
+        // when the text content is still streaming. This keeps MessageBubble's
+        // `widgetToRender` useMemo stable, so a rendered widget (e.g. a kanban board
+        // with framer-motion layout animations) is NOT re-rendered on every text
+        // token — which previously caused layout-projection thrash ("Maximum update
+        // depth exceeded") while the trailing summary streamed in.
+        const prevMsg = prevById.get(m.id);
+        const toolsUnchanged =
+          prevMsg &&
+          (prevMsg.toolInvocations?.length ?? 0) === toolInvocations.length &&
+          toolInvocations.every(
+            (ti, i) =>
+              prevMsg.toolInvocations![i]?.toolCallId === ti.toolCallId &&
+              prevMsg.toolInvocations![i]?.state === ti.state
+          );
+
+        // Nothing changed at all → reuse the whole message object.
+        if (prevMsg && toolsUnchanged && prevMsg.content === content) {
+          return prevMsg;
+        }
+
+        changed = true;
+        return {
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content,
+          createdAt: (m.metadata as any)?.createdAt || new Date().toISOString(),
+          // Reuse the prior array reference when the tools are unchanged.
+          toolInvocations: toolsUnchanged ? prevMsg!.toolInvocations : toolInvocations,
+        };
+      });
+
+      // CRITICAL: if nothing changed, return the SAME array reference so React
+      // bails out of the re-render. useChat returns a new agentMessages reference
+      // on every render, so without this guard the effect → setMessages → re-render
+      // → effect cycle never settles ("Maximum update depth exceeded").
+      return changed ? next : prev;
+    });
   }, [agentMessages, isAgentMode, agentStatus]);
 
   // Load chat messages from DB when chatId changes
