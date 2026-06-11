@@ -176,18 +176,25 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
           });
         }
 
-        // Reuse previous object reference if nothing has changed.
+        // Reuse previous references where possible. Tool invocations are compared
+        // by toolCallId + state: if unchanged we keep the SAME array reference even
+        // when the text content is still streaming. This keeps MessageBubble's
+        // `widgetToRender` useMemo stable, so a rendered widget (e.g. a kanban board
+        // with framer-motion layout animations) is NOT re-rendered on every text
+        // token — which previously caused layout-projection thrash ("Maximum update
+        // depth exceeded") while the trailing summary streamed in.
         const prevMsg = prevById.get(m.id);
-        if (
+        const toolsUnchanged =
           prevMsg &&
-          prevMsg.content === content &&
           (prevMsg.toolInvocations?.length ?? 0) === toolInvocations.length &&
           toolInvocations.every(
             (ti, i) =>
               prevMsg.toolInvocations![i]?.toolCallId === ti.toolCallId &&
               prevMsg.toolInvocations![i]?.state === ti.state
-          )
-        ) {
+          );
+
+        // Nothing changed at all → reuse the whole message object.
+        if (prevMsg && toolsUnchanged && prevMsg.content === content) {
           return prevMsg;
         }
 
@@ -196,7 +203,8 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
           role: m.role as 'user' | 'assistant',
           content,
           createdAt: (m.metadata as any)?.createdAt || new Date().toISOString(),
-          toolInvocations,
+          // Reuse the prior array reference when the tools are unchanged.
+          toolInvocations: toolsUnchanged ? prevMsg!.toolInvocations : toolInvocations,
         };
       });
     });

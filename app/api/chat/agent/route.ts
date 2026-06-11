@@ -639,6 +639,22 @@ export async function POST(req: Request) {
         );
         const widgetHtml = htmlWidget ? htmlWidget.result.html : null;
 
+        // Persist structured widgets (kanban/dashboard/treemap/etc.) so they can be
+        // re-rendered after a reload. The full result is kept in the dedicated
+        // `widget` column (NOT in toolInvocations, which is sanitised below and re-sent
+        // to the model). Shape matches MessageBubble's live-render path:
+        // { type, params: <full tool result> }. html-canvas is handled via widgetHtml.
+        const structuredWidgetCall = toolInvocations.find(
+          (ti: any) =>
+            ti.toolName === 'render_widget' &&
+            ti.result?.type &&
+            ti.result.type !== 'html-canvas' &&
+            ti.result.type !== 'text'
+        );
+        const widget = structuredWidgetCall
+          ? { type: structuredWidgetCall.result.type, params: structuredWidgetCall.result }
+          : null;
+
         // Strip render_widget payloads before saving to DB — the full kanban/dashboard/html
         // data must not be re-sent to the model on follow-up turns (causes 400 Bad Request
         // from SiliconFlow when the serialised tool result exceeds the payload size limit).
@@ -659,6 +675,7 @@ export async function POST(req: Request) {
           role: 'assistant',
           content: info.text || '',
           toolInvocations: sanitisedToolInvocations,
+          widget,
           widgetHtml,
         });
 
