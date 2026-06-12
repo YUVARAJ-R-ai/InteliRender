@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, memo } from 'react';
 import { ChatMessage } from '@/types/widget';
 import { WidgetRenderer } from '@/components/widgets/WidgetRenderer';
 import { Trash2, Copy, Check, ThumbsUp, ThumbsDown, RotateCw } from 'lucide-react';
@@ -41,7 +41,7 @@ interface MessageBubbleProps {
   isLastInGroup?: boolean;
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   message,
   onDelete,
   onRegenerate,
@@ -51,6 +51,19 @@ export function MessageBubble({
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+
+  // Stable reference — prevents widget components with params-dependent hooks
+  // (e.g. recharts internals) from re-triggering on every parent re-render,
+  // which caused "Maximum update depth exceeded".
+  const widgetToRender = useMemo(() => {
+    if (message.widgetHtml) return null; // handled separately by PersistedHtmlWidget
+    const widgetCall = message.toolInvocations?.find(
+      (ti: any) => ti.toolName === 'render_widget' && ti.state === 'result'
+    );
+    const result = message.widget || (widgetCall?.result ? { type: widgetCall.result.type, params: widgetCall.result } : null);
+    if (!result || result.type === 'text') return null;
+    return result;
+  }, [message.toolInvocations, message.widget, message.widgetHtml]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
@@ -308,30 +321,15 @@ export function MessageBubble({
             )}
             
             {/* Widget rendering */}
-            {(() => {
-              // Persisted HTML widget (after reload) takes precedence and is rendered
-              // from the saved markup — never re-generated.
-              if (message.widgetHtml) {
-                return (
-                  <div className={`w-full overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
-                    <PersistedHtmlWidget html={message.widgetHtml} />
-                  </div>
-                );
-              }
-
-              const widgetCall = message.toolInvocations?.find(
-                ti => ti.toolName === 'render_widget' && ti.state === 'result'
-              );
-              const widgetToRender = message.widget || (widgetCall?.result ? { type: widgetCall.result.type, params: widgetCall.result } : null);
-
-              if (!widgetToRender || widgetToRender.type === 'text') return null;
-
-              return (
-                <div className={`w-full overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
-                  <WidgetRenderer widget={widgetToRender as any} />
-                </div>
-              );
-            })()}
+            {message.widgetHtml ? (
+              <div className={`w-full overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
+                <PersistedHtmlWidget html={message.widgetHtml} />
+              </div>
+            ) : widgetToRender ? (
+              <div className={`w-full overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
+                <WidgetRenderer widget={widgetToRender as any} />
+              </div>
+            ) : null}
         </div>
 
         {/* Footer (Timestamp) — only shown for the last message in a consecutive group */}
@@ -347,4 +345,12 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+// Only re-render when the message object reference changes or grouping flags change.
+// During streaming, the ChatWindow stable-ref optimisation ensures unchanged messages
+// keep the same reference, so this bailout prevents them from cascading re-renders
+// into internal class-component state updates (e.g. third-party libraries).
+}, (prev, next) =>
+  prev.message === next.message &&
+  prev.isFirstInGroup === next.isFirstInGroup &&
+  prev.isLastInGroup === next.isLastInGroup
+);
