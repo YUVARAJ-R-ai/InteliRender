@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 /**
@@ -19,6 +20,12 @@ export function Drawer({
   title: string;
   children: React.ReactNode;
 }) {
+  // Render into a portal so the drawer overlays the full viewport regardless of
+  // any transformed ancestor (a CSS transform on a parent would otherwise become
+  // the containing block for `position: fixed`, clipping the drawer).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Close on Escape
   useEffect(() => {
     if (!open) return;
@@ -27,9 +34,9 @@ export function Drawer({
     return () => document.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[120]">
       {/* Backdrop */}
       <div
@@ -64,6 +71,7 @@ export function Drawer({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
