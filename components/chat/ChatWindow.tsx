@@ -147,98 +147,106 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
     }
   });
 
-  // Sync messages from useChat only while the agent is actively generating.
-  // Skipping when status === 'ready' prevents the DB-seeded agentMessages from
-  // overwriting freshly loaded messages on chat switch (Pattern C/D feedback loop).
+  // Live view of the in-flight agent conversation, DERIVED from useChat state
+  // with useMemo — NOT mirrored into `messages` through an effect.
   //
-  // Uses functional setState + stable-reference reuse: if a message's content and
-  // tool-invocation states haven't changed since the last render, the same object
-  // reference is returned. Combined with React.memo on MessageBubble this means
-  // only the actively-streaming message re-renders on each token — preventing
-  // cascading re-renders into third-party class components (Maximum update depth).
-  useEffect(() => {
-    if (!isAgentMode || (agentStatus !== 'submitted' && agentStatus !== 'streaming') || agentMessages.length === 0) return;
+  // The previous effect-based sync (effect → setMessages → re-render → new
+  // agentMessages ref → effect → …) scheduled a state update for every stream
+  // chunk. During fast token bursts the chain exceeded React's nested-update
+  // limit and threw "Maximum update depth exceeded" mid-stream. Deriving the
+  // view is pure — there is no setState in the streaming path at all, so the
+  // overflow cannot occur.
+  //
+  // Object identity is reused from `messages` when a message's content and
+  // tool-invocation states are unchanged, so memoised MessageBubbles skip
+  // re-rendering and DB-only fields (widget/widgetHtml) survive streaming.
+  const liveAgentMessages = useMemo(() => {
+    const prevById = new Map(messages.map((p) => [p.id, p]));
+    return agentMessages.map((m) => {
+      const content = m.parts
+        ?.filter((part: any) => part.type === 'text')
+        .map((part: any) => part.text)
+        .join('\n') || '';
 
-    setMessages(prev => {
-      const prevById = new Map(prev.map(p => [p.id, p]));
-      let changed = prev.length !== agentMessages.length;
-      const next = agentMessages.map((m) => {
-        const content = m.parts
-          ?.filter((part: any) => part.type === 'text')
-          .map((part: any) => part.text)
-          .join('\n') || '';
+      const toolInvocations: any[] = m.parts
+        ?.filter((part: any) => part.type.startsWith('tool-') || part.type === 'dynamic-tool')
+        .map((part: any) => {
+          let toolName = part.toolName;
+          if (!toolName && part.type.startsWith('tool-')) {
+            toolName = part.type.substring(5);
+          }
+          const state: 'call' | 'result' =
+            (part.state === 'output-available' || part.state === 'output-error') ? 'result' : 'call';
+          return {
+            state,
+            toolCallId: part.toolCallId,
+            toolName,
+            args: part.input,
+            result: part.output || part.errorText
+          };
+        }) || [];
 
-        const toolInvocations: any[] = m.parts
-          ?.filter((part: any) => part.type.startsWith('tool-') || part.type === 'dynamic-tool')
-          .map((part: any) => {
-            let toolName = part.toolName;
-            if (!toolName && part.type.startsWith('tool-')) {
-              toolName = part.type.substring(5);
-            }
-            const state: 'call' | 'result' =
-              (part.state === 'output-available' || part.state === 'output-error') ? 'result' : 'call';
-            return {
-              state,
-              toolCallId: part.toolCallId,
-              toolName,
-              args: part.input,
-              result: part.output || part.errorText
-            };
-          }) || [];
+      // Include reasoning parts as a mock think tool call so MessageBubble displays it
+      const reasoningParts = m.parts?.filter((part: any) => part.type === 'reasoning');
+      if (reasoningParts && reasoningParts.length > 0) {
+        const thought = reasoningParts.map((p: any) => p.text).join('\n');
+        toolInvocations.unshift({
+          state: 'result',
+          toolCallId: 'reasoning-' + m.id,
+          toolName: 'think',
+          args: { thought },
+          result: { thought, acknowledged: true }
+        });
+      }
 
-        // Include reasoning parts as a mock think tool call so MessageBubble displays it
-        const reasoningParts = m.parts?.filter((part: any) => part.type === 'reasoning');
-        if (reasoningParts && reasoningParts.length > 0) {
-          const thought = reasoningParts.map((p: any) => p.text).join('\n');
-          toolInvocations.unshift({
-            state: 'result',
-            toolCallId: 'reasoning-' + m.id,
-            toolName: 'think',
-            args: { thought },
-            result: { thought, acknowledged: true }
-          });
-        }
+      const prevMsg = prevById.get(m.id);
+      const toolsUnchanged =
+        prevMsg &&
+        (prevMsg.toolInvocations?.length ?? 0) === toolInvocations.length &&
+        toolInvocations.every(
+          (ti, i) =>
+            prevMsg.toolInvocations![i]?.toolCallId === ti.toolCallId &&
+            prevMsg.toolInvocations![i]?.state === ti.state
+        );
 
-        // Reuse previous references where possible. Tool invocations are compared
-        // by toolCallId + state: if unchanged we keep the SAME array reference even
-        // when the text content is still streaming. This keeps MessageBubble's
-        // `widgetToRender` useMemo stable, so a rendered widget (e.g. a kanban board
-        // with framer-motion layout animations) is NOT re-rendered on every text
-        // token — which previously caused layout-projection thrash ("Maximum update
-        // depth exceeded") while the trailing summary streamed in.
-        const prevMsg = prevById.get(m.id);
-        const toolsUnchanged =
-          prevMsg &&
-          (prevMsg.toolInvocations?.length ?? 0) === toolInvocations.length &&
-          toolInvocations.every(
-            (ti, i) =>
-              prevMsg.toolInvocations![i]?.toolCallId === ti.toolCallId &&
-              prevMsg.toolInvocations![i]?.state === ti.state
-          );
+      // Nothing changed → reuse the whole message object (keeps widget/widgetHtml).
+      if (prevMsg && toolsUnchanged && prevMsg.content === content) {
+        return prevMsg;
+      }
 
-        // Nothing changed at all → reuse the whole message object.
-        if (prevMsg && toolsUnchanged && prevMsg.content === content) {
-          return prevMsg;
-        }
-
-        changed = true;
-        return {
-          id: m.id,
-          role: m.role as 'user' | 'assistant',
-          content,
-          createdAt: (m.metadata as any)?.createdAt || new Date().toISOString(),
-          // Reuse the prior array reference when the tools are unchanged.
-          toolInvocations: toolsUnchanged ? prevMsg!.toolInvocations : toolInvocations,
-        };
-      });
-
-      // CRITICAL: if nothing changed, return the SAME array reference so React
-      // bails out of the re-render. useChat returns a new agentMessages reference
-      // on every render, so without this guard the effect → setMessages → re-render
-      // → effect cycle never settles ("Maximum update depth exceeded").
-      return changed ? next : prev;
+      return {
+        id: m.id,
+        role: m.role as 'user' | 'assistant',
+        content,
+        createdAt: (m.metadata as any)?.createdAt || new Date().toISOString(),
+        toolInvocations: toolsUnchanged ? prevMsg!.toolInvocations : toolInvocations,
+      };
     });
-  }, [agentMessages, isAgentMode, agentStatus]);
+  }, [agentMessages, messages]);
+
+  const agentStreamActive =
+    isAgentMode &&
+    (agentStatus === 'submitted' || agentStatus === 'streaming') &&
+    agentMessages.length > 0;
+
+  // Commit the final transcript into `messages` exactly once when the stream
+  // leaves the active state (ready or error). This is React's documented
+  // "adjust state during render" pattern: guarded by a ref so it fires a single
+  // bounded update per transition — never a chain. Committing during render
+  // (instead of in an effect) also means there is no one-frame flash of the
+  // stale transcript when displayMessages switches back to `messages`.
+  const prevAgentStatusRef = useRef(agentStatus);
+  if (prevAgentStatusRef.current !== agentStatus) {
+    const wasActive = prevAgentStatusRef.current === 'submitted' || prevAgentStatusRef.current === 'streaming';
+    prevAgentStatusRef.current = agentStatus;
+    if (isAgentMode && wasActive && agentStatus !== 'submitted' && agentStatus !== 'streaming' && agentMessages.length > 0) {
+      setMessages(liveAgentMessages);
+    }
+  }
+
+  // What the transcript renders: the derived live view while the agent streams,
+  // the canonical `messages` state otherwise.
+  const displayMessages = agentStreamActive ? liveAgentMessages : messages;
 
   // Load chat messages from DB when chatId changes
   useEffect(() => {
@@ -316,7 +324,7 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isLoading]);
+  }, [displayMessages, isLoading]);
 
   // Auto-grow textarea height
   useEffect(() => {
@@ -624,7 +632,7 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
     { label: "Design a habit tracker",       icon: CheckCircle },
   ];
 
-  const showLoaderAvatar = messages.length === 0 || messages[messages.length - 1].role === 'user';
+  const showLoaderAvatar = displayMessages.length === 0 || displayMessages[displayMessages.length - 1].role === 'user';
 
   return (
     <div className="flex flex-col h-full w-full bg-transparent">
@@ -643,7 +651,7 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
       {/* Main Chat Area */}
       <ScrollArea className="flex-1 min-h-0 relative w-full bg-[#1a1a1a]">
         <div className="w-full max-w-[48rem] mx-auto px-4 py-6 max-sm:max-w-full max-sm:px-3 max-sm:py-4 flex flex-col min-h-full">
-          {messages.length === 0 ? (
+          {displayMessages.length === 0 ? (
             /* Empty state: grounded card, positioned at ~45% from top */
             <div className="flex flex-col items-center select-none" style={{ paddingTop: 'max(48px, calc(45vh - 220px))' }}>
               <div className="ir-fade-slide-up w-full max-w-[480px] bg-[#1e1e1e] border border-[#2e2e2e] rounded-2xl p-8 flex flex-col items-center text-center shadow-lg">
@@ -690,9 +698,9 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
             </div>
           ) : (
             <div className="flex-1 flex flex-col">
-              {messages.map((m, index) => {
-                const isFirstInGroup = index === 0 || messages[index - 1].role !== m.role;
-                const isLastInGroup = index === messages.length - 1 || messages[index + 1].role !== m.role;
+              {displayMessages.map((m, index) => {
+                const isFirstInGroup = index === 0 || displayMessages[index - 1].role !== m.role;
+                const isLastInGroup = index === displayMessages.length - 1 || displayMessages[index + 1].role !== m.role;
                 return (
                   <MessageBubble 
                     key={m.id} 
