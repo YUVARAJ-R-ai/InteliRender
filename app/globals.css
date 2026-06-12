@@ -68,6 +68,7 @@
 }
 
 :root {
+  --ir-font-size: 0.9375rem;
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-geist-mono: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Monaco, Consolas, monospace;
   --background: oklch(1 0 0);
@@ -102,6 +103,52 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* Light theme — mirrors .dark but with inverted surfaces */
+.light {
+  --bg-primary: #F8F9FA;
+  --bg-sidebar: #F1F3F4;
+  --bg-user-bubble: #E8EAED;
+  --bg-bot-bubble: transparent;
+  --bg-input: #E8EAED;
+  --bg-elevated: #FFFFFF;
+
+  --text-primary: #1A1C1E;
+  --text-muted: #5F6368;
+  --text-on-accent: #FFFFFF;
+
+  --accent: #1A73E8;
+  --accent-subtle: rgba(26, 115, 232, 0.08);
+  --accent-border: rgba(26, 115, 232, 0.15);
+
+  --border-default: rgba(0, 0, 0, 0.08);
+  --border-accent: rgba(26, 115, 232, 0.15);
+
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --card: var(--bg-elevated);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent);
+  --primary-foreground: var(--text-on-accent);
+  --secondary: var(--bg-user-bubble);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-user-bubble);
+  --muted-foreground: var(--text-muted);
+  --border: var(--border-default);
+  --input: var(--bg-input);
+  --ring: var(--accent);
+
+  --sidebar: var(--bg-sidebar);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--text-on-accent);
+  --sidebar-accent: var(--bg-user-bubble);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-default);
+  --sidebar-ring: var(--accent);
 }
 
 .dark {
