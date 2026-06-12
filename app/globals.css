@@ -301,3 +301,61 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #3D3F43;
 }
+
+/* ── Light theme palette remap ────────────────────────────────────────────────
+   The UI is painted with hardcoded hex utility classes (e.g. bg-[#1a1a1a]) rather
+   than semantic CSS variables, so toggling theme variables alone repaints nothing.
+   These rules remap the known "Midnight Focus" palette to light equivalents when
+   `html.light` is active. Unlayered rules outrank Tailwind's layered utilities, and
+   [class~="…" i] matches the arbitrary-value classes case-insensitively.
+   (Hover-state variants like hover:bg-[…] are intentionally left dark.) */
+
+/* Surfaces — background */
+html.light [class~="bg-[#1a1a1a]" i] { background-color: #ffffff; }
+html.light [class~="bg-[#1A1C1E]" i] { background-color: #ffffff; }
+html.light [class~="bg-[#1F2226]" i] { background-color: #f4f6f8; }
+html.light [class~="bg-[#111214]" i] { background-color: #f4f6f8; }
+html.light [class~="bg-[#141618]" i] { background-color: #f4f6f8; }
+html.light [class~="bg-[#141414]" i] { background-color: #f4f6f8; }
+html.light [class~="bg-[#161616]" i] { background-color: #f0f2f5; }
+html.light [class~="bg-[#1e1e1e]" i] { background-color: #eceef1; }
+html.light [class~="bg-[#1e2023]" i] { background-color: #eceef1; }
+html.light [class~="bg-[#242424]" i] { background-color: #edeff2; }
+html.light [class~="bg-[#2a2a2a]" i] { background-color: #e0e3e8; }
+html.light [class~="bg-[#2D2F33]" i] { background-color: #eceef1; }
+html.light [class~="bg-[#2e2e2e]" i] { background-color: #d7dbe1; }
+html.light [class~="bg-[#3a3a3a]" i] { background-color: #c6ccd4; }
+
+/* Surfaces — borders */
+html.light [class~="border-[#242424]" i] { border-color: #e0e3e8; }
+html.light [class~="border-[#2a2a2a]" i] { border-color: #dadee4; }
+html.light [class~="border-[#2e2e2e]" i] { border-color: #d2d6dd; }
+html.light [class~="border-[#3a3a3a]" i] { border-color: #c6ccd4; }
+html.light [class~="border-[#1e1e1e]" i] { border-color: #e6e8ec; }
+
+/* Text */
+html.light [class~="text-[#E8EDF2]" i] { color: #1a1c1e; }
+html.light [class~="text-[#C8CDD3]" i] { color: #3c4043; }
+html.light [class~="text-[#9CA3AF]" i] { color: #5f6368; }
+html.light [class~="text-[#A5A299]" i] { color: #5f6368; }
+html.light [class~="text-[#6B7280]" i] { color: #6e7378; }
+html.light [class~="text-[#4B5563]" i] { color: #9aa0a6; }
+
+/* Markdown (prose-invert renders light-on-dark; flip to dark text on light) */
+html.light .prose-invert {
+  --tw-prose-body: #1a1c1e;
+  --tw-prose-headings: #0b0c0d;
+  --tw-prose-bold: #0b0c0d;
+  --tw-prose-links: #1a73e8;
+  --tw-prose-quotes: #3c4043;
+  --tw-prose-bullets: #9aa0a6;
+  --tw-prose-counters: #6e7378;
+  --tw-prose-hr: #dee1e6;
+  --tw-prose-th-borders: #c6ccd4;
+  --tw-prose-td-borders: #dee1e6;
+  color: #1a1c1e;
+}
+
+/* Light-mode scrollbars */
+html.light ::-webkit-scrollbar-thumb { background: #c6ccd4; }
+html.light ::-webkit-scrollbar-thumb:hover { background: #aab2bd; }
