@@ -58,7 +58,7 @@ export function UserMenu() {
     hasArrow = false,
     danger = false,
   }: {
-    icon: React.ElementType;
+    icon: React.ComponentType<any>;
     label: string;
     onClick?: () => void;
     hasArrow?: boolean;

@@ -19,7 +19,7 @@ const MODELS = ['DeepSeek-V4-Flash', 'DeepSeek-R1', 'Claude 3.5 Sonnet', 'GPT-4o
 
 export type Section = 'Appearance' | 'Workspace' | 'Behavior';
 
-const NAV: { label: Section; icon: React.ElementType }[] = [
+const NAV: { label: Section; icon: React.ComponentType<any> }[] = [
   { label: 'Appearance',   icon: Monitor    },
   { label: 'Workspace',    icon: LayoutGrid },
   { label: 'Behavior',     icon: Zap        },
@@ -59,7 +59,7 @@ function Segment<T extends string>({
   return (
     <div className="flex bg-[#161616] border border-[#2a2a2a] rounded-lg p-0.5 gap-0.5">
       {options.map((opt, i) => {
-        const Icon = icons?.[i];
+        const Icon = icons?.[i] as React.ComponentType<any> | undefined;
         return (
           <button
             key={opt}
@@ -310,8 +310,8 @@ function GoogleOAuthCard() {
 // ── Integrations section ──────────────────────────────────────────────────────
 
 type IntegrationDef =
-  | { service: string; label: string; icon: React.ElementType; description: string; authType: 'pat'; placeholder: string; hint?: string }
-  | { service: string; label: string; icon: React.ElementType; description: string; authType: 'oauth'; oauthPath: string };
+  | { service: string; label: string; icon: React.ComponentType<any>; description: string; authType: 'pat'; placeholder: string; hint?: string }
+  | { service: string; label: string; icon: React.ComponentType<any>; description: string; authType: 'oauth'; oauthPath: string };
 
 const INTEGRATION_DEFS: IntegrationDef[] = [
   // ── Google services (OAuth) ──
