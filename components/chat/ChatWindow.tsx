@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatMessage } from '@/types/widget';
-import { Send, AlertCircle, Sparkles, HelpCircle, LayoutGrid, BarChart2, GitMerge, CheckCircle, ChevronDown } from 'lucide-react';
+import { Send, AlertCircle, Sparkles, HelpCircle, LayoutGrid, BarChart2, GitMerge, CheckCircle, ChevronDown, Menu } from 'lucide-react';
 import { UserMenu } from '@/components/UserMenu';
 import { useChat } from '@ai-sdk/react';
 import { BUILTIN_SKILLS, Skill } from '@/lib/skills';
@@ -14,9 +14,10 @@ import { CHAT_MODELS, DEFAULT_CHAT_MODEL_ID } from '@/lib/ai';
 interface ChatWindowProps {
   chatId: number | null;
   onChatCreated: (id: number) => void;
+  onMenuClick?: () => void;
 }
 
-export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
+export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStandardLoading, setIsStandardLoading] = useState(false);
@@ -637,8 +638,20 @@ export function ChatWindow({ chatId, onChatCreated }: ChatWindowProps) {
   return (
     <div className="flex flex-col h-full w-full bg-transparent">
       {/* Header */}
-      <div className="h-14 border-b border-[#2a2a2a] flex items-center justify-between px-6 bg-[#1a1a1a] shrink-0">
-        <h1 className="text-sm font-medium text-[#E8EDF2] tracking-wide">IntelliRender Workspace</h1>
+      <div className="h-14 border-b border-[#2a2a2a] flex items-center justify-between px-4 md:px-6 bg-[#1a1a1a] shrink-0">
+        <div className="flex items-center gap-3">
+          {/* Hamburger — only visible on mobile when sidebar is hidden */}
+          {onMenuClick && (
+            <button
+              onClick={onMenuClick}
+              className="md:hidden p-1.5 rounded-lg text-[#6B7280] hover:text-[#E8EDF2] hover:bg-[#2a2a2a] transition-colors"
+              aria-label="Open sidebar"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+          )}
+          <h1 className="text-sm font-medium text-[#E8EDF2] tracking-wide">IntelliRender Workspace</h1>
+        </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-[#8AB4F8] animate-pulse" />
