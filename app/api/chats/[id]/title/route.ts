@@ -40,7 +40,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         system: 'Return ONLY a 4-word-or-fewer title that summarises the message. No quotes, no punctuation, no explanation — just the title.',
         prompt: firstMessage.slice(0, 300),
       });
-      title = text.replace(/["'`*]/g, '').replace(/\n.*/s, '').trim().slice(0, 60);
+      // [\s\S] instead of the `s` flag — tsconfig targets pre-es2018
+      title = text.replace(/["'`*]/g, '').replace(/\n[\s\S]*/, '').trim().slice(0, 60);
     } catch {
       // Fall through to fallback
     }
