@@ -170,12 +170,13 @@ export const MessageBubble = memo(function MessageBubble({
           isUser ? 'max-w-[70%] items-end' : 'w-full items-start'
         }`}
       >
-        <div 
-          className={`text-[#E8EDF2] text-[0.9375rem] leading-[1.6] transition-all duration-150 ${
-            isUser 
-              ? `bg-[#2D2F33] p-[0.625rem_1rem] ${userBorderRadiusClass} border-0 shadow-none` 
+        <div
+          className={`text-[#E8EDF2] leading-[1.6] transition-all duration-150 ${
+            isUser
+              ? `bg-[#2D2F33] p-[0.625rem_1rem] ${userBorderRadiusClass} border-0 shadow-none`
               : 'bg-transparent border-0 shadow-none pl-[2.5rem] w-full'
           }`}
+          style={{ fontSize: 'var(--ir-font-size)' }}
         >
           <div className="prose prose-invert max-w-none w-full">
             {message.content ? (
