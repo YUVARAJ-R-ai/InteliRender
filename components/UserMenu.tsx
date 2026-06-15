@@ -6,13 +6,20 @@ import {
   Settings, LogOut, User, Sparkles, ChevronRight,
   HelpCircle, Palette, Crown,
 } from 'lucide-react';
-import { SettingsModal } from './SettingsModal';
+import { SettingsModal, Section } from './SettingsModal';
 
 export function UserMenu() {
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<Section>('Appearance');
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const openSettings = (section: Section) => {
+    setSettingsSection(section);
+    setShowSettings(true);
+    setOpen(false);
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -51,7 +58,7 @@ export function UserMenu() {
     hasArrow = false,
     danger = false,
   }: {
-    icon: React.ElementType;
+    icon: React.ComponentType<any>;
     label: string;
     onClick?: () => void;
     hasArrow?: boolean;
@@ -126,12 +133,17 @@ export function UserMenu() {
             {/* Menu items */}
             <div className="p-1.5 space-y-0.5">
               <MenuItem icon={Crown} label="Upgrade plan" hasArrow />
-              <MenuItem icon={Palette} label="Personalization" hasArrow />
+              <MenuItem
+                icon={Palette}
+                label="Personalization"
+                hasArrow
+                onClick={() => openSettings('Appearance')}
+              />
               <MenuItem icon={User} label="Profile" hasArrow />
               <MenuItem
                 icon={Settings}
                 label="Settings"
-                onClick={() => { setOpen(false); setShowSettings(true); }}
+                onClick={() => openSettings('Workspace')}
               />
             </div>
 
@@ -152,7 +164,7 @@ export function UserMenu() {
         )}
       </div>
 
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingsModal initialSection={settingsSection} onClose={() => setShowSettings(false)} />}
     </>
   );
 }

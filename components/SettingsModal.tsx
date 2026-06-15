@@ -2,32 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Monitor, Sun, Moon, Type, LayoutGrid, Zap, Key, Plug, Eye, EyeOff, CheckCircle, Circle, Loader2, Trash2, GitBranch, FileText, Layers, ClipboardList, Upload, ShieldCheck, Mail, HardDrive, Calendar, CreditCard, Database, MessageSquare } from 'lucide-react';
-
-interface Settings {
-  theme: 'dark' | 'light' | 'system';
-  accentColor: string;
-  fontSize: 'sm' | 'md' | 'lg';
-  defaultModel: string;
-  defaultMode: 'standard' | 'agent';
-  showQuickChips: boolean;
-  sidebarCollapsed: boolean;
-  autoRun: boolean;
-  streamResponses: boolean;
-  showTokenCount: boolean;
-}
-
-const DEFAULTS: Settings = {
-  theme: 'dark',
-  accentColor: '#8AB4F8',
-  fontSize: 'md',
-  defaultModel: 'DeepSeek-V4-Flash',
-  defaultMode: 'standard',
-  showQuickChips: true,
-  sidebarCollapsed: false,
-  autoRun: false,
-  streamResponses: true,
-  showTokenCount: false,
-};
+import { useSettings } from '@/lib/settings-context';
 
 const ACCENT_SWATCHES = [
   { color: '#8AB4F8', label: 'Blue'    },
@@ -44,7 +19,7 @@ const MODELS = ['DeepSeek-V4-Flash', 'DeepSeek-R1', 'Claude 3.5 Sonnet', 'GPT-4o
 
 export type Section = 'Appearance' | 'Workspace' | 'Behavior';
 
-const NAV: { label: Section; icon: React.ElementType }[] = [
+const NAV: { label: Section; icon: React.ComponentType<any> }[] = [
   { label: 'Appearance',   icon: Monitor    },
   { label: 'Workspace',    icon: LayoutGrid },
   { label: 'Behavior',     icon: Zap        },
@@ -84,7 +59,7 @@ function Segment<T extends string>({
   return (
     <div className="flex bg-[#161616] border border-[#2a2a2a] rounded-lg p-0.5 gap-0.5">
       {options.map((opt, i) => {
-        const Icon = icons?.[i];
+        const Icon = icons?.[i] as React.ComponentType<any> | undefined;
         return (
           <button
             key={opt}
@@ -335,8 +310,8 @@ function GoogleOAuthCard() {
 // ── Integrations section ──────────────────────────────────────────────────────
 
 type IntegrationDef =
-  | { service: string; label: string; icon: React.ElementType; description: string; authType: 'pat'; placeholder: string; hint?: string }
-  | { service: string; label: string; icon: React.ElementType; description: string; authType: 'oauth'; oauthPath: string };
+  | { service: string; label: string; icon: React.ComponentType<any>; description: string; authType: 'pat'; placeholder: string; hint?: string }
+  | { service: string; label: string; icon: React.ComponentType<any>; description: string; authType: 'oauth'; oauthPath: string };
 
 const INTEGRATION_DEFS: IntegrationDef[] = [
   // ── Google services (OAuth) ──
@@ -522,21 +497,8 @@ export function SettingsModal({ onClose, initialSection }: {
   initialSection?: Section;
 }) {
   const [section, setSection] = useState<Section>(initialSection ?? 'Appearance');
-  const [settings, setSettings] = useState<Settings>(DEFAULTS);
+  const { settings, set } = useSettings();
   const backdropRef = useRef<HTMLDivElement>(null);
-
-  // Load from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem('ir_settings');
-    if (stored) {
-      try { setSettings({ ...DEFAULTS, ...JSON.parse(stored) }); } catch {}
-    }
-  }, []);
-
-  // Persist on change
-  useEffect(() => {
-    localStorage.setItem('ir_settings', JSON.stringify(settings));
-  }, [settings]);
 
   // Escape to close
   useEffect(() => {
@@ -544,9 +506,6 @@ export function SettingsModal({ onClose, initialSection }: {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
-
-  const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
-    setSettings(prev => ({ ...prev, [key]: value }));
 
   return (
     <div

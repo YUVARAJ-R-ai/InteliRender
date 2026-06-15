@@ -78,7 +78,7 @@ function extractJSON(text: string): any {
 
 export async function POST(req: Request) {
   try {
-    const { messages, chatId } = await req.json();
+    const { messages, chatId, model } = await req.json();
 
     const session = await auth();
     const userId = session?.user?.id ?? null;
@@ -105,7 +105,7 @@ export async function POST(req: Request) {
 
     // ── Step 1: decide widget type via generateText ──────────────────────
     const decisionResult = await generateText({
-      model: getModel(apiKey),
+      model: getModel(apiKey, model),
       maxOutputTokens: 2000,
       maxRetries: 2,
       messages: aiMessages.map(m => ({ role: m.role, content: m.content })),
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
     if (d.type === 'html-canvas') {
       // ── Step 2: generate the HTML with generateText ──────
       const htmlResult = await generateText({
-        model: getModel(apiKey),
+        model: getModel(apiKey, model),
         maxOutputTokens: 4096,
         maxRetries: 1,
         messages: aiMessages.map(m => ({ role: m.role, content: m.content })),

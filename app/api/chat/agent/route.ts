@@ -145,9 +145,12 @@ const SYSTEM_PROMPT = `
 You are IntelliRender, an agentic visual response engine.
 
 TOOL SELECTION RULES:
-- Visual/UI widgets (kanban, dashboard, gravity, canvas, timeline, mindmap, flowchart, matrix, pomodoro): use render_widget with type html-canvas and generate self-contained HTML/CSS/JS.
+- Kanban boards: use render_widget with type kanban. Pass columns under params.columns. Each column needs title, color, and tasks array. Each task needs title and priority (high/medium/low). Example: { type: "kanban", title: "Sprint Board", reasoning: "...", params: { columns: [{ title: "To Do", color: "#6366f1", tasks: [{ title: "Task 1", priority: "high" }] }] } }
+- Dashboards: use render_widget with type dashboard and pass params.kpis / params.chart.
+- Custom visuals (timelines, mindmaps, flowcharts, simulations, gravity, pomodoro, games): use render_widget with type html-canvas and generate self-contained HTML/CSS/JS.
 - Web lookups: use web_search.
-- Fetch full page content: use fetch_url.
+- Browser automation: use browser_task whenever the user says "open", "go to", "visit", "log in to", "click", "fill", or "scrape" a website — ANY request to interact with or look at a live page in a browser. When credentials are needed, ask the user for them in-chat first and explain they are used only for this session and never stored.
+- Fetch full page content: use fetch_url ONLY when the user asks to read/summarize the text of an article or documentation page and no interaction is needed. If the request says open/go to/visit a site, that is browser_task — never fetch_url.
 - Math / financial calculations: use calculate before building a widget with numbers.
 - Export data as CSV: use generate_csv, then reply with the returned dataUrl as a markdown download link.
 - Complex reasoning: use think before acting.
@@ -193,7 +196,7 @@ export async function POST(req: Request) {
   // Maps server name → connected client so compound tools can reuse them
   const mcpClientMap: Record<string, Client> = {};
   try {
-    const { messages, chatId, mcpServers } = await req.json();
+    const { messages, chatId, mcpServers, model } = await req.json();
 
     // Inject per-user SiliconFlow API key from DB (falls back to env if not set)
     const session = await auth();
@@ -244,8 +247,15 @@ export async function POST(req: Request) {
           additionalProperties: false,
         } as any),
         execute: async (params: any) => {
-          if (params.type === 'kanban' && params.params?.columns) {
-            return { type: 'kanban', columns: params.params.columns };
+          if (params.type === 'kanban') {
+            // Accept columns at params.params.columns (nested) OR params.columns (flat)
+            const rawColumns: any[] = params.params?.columns ?? (params as any).columns ?? [];
+            // Normalise the tasks key — model may use items/cards/todos instead of tasks
+            const columns = rawColumns.map((col: any) => ({
+              ...col,
+              tasks: col.tasks ?? col.items ?? col.cards ?? col.todos ?? [],
+            }));
+            return { type: 'kanban', columns };
           }
           if (params.type === 'dashboard' && params.params) {
             return { type: 'dashboard', kpis: params.params.kpis, chart: params.params.chart, table: params.params.table };
@@ -306,6 +316,72 @@ export async function POST(req: Request) {
           }
         }
       } as any),
+      browser_task: tool({
+        description: 'Control a real browser to perform web tasks: navigate to URLs, click elements, fill forms, extract text, take screenshots. ALWAYS use this when the user says open, go to, visit, browse, log in to, scrape, or automate a website — even if they only want the page title or content. Ask the user for credentials in-chat when required — they are passed per-request and never stored.',
+        inputSchema: jsonSchema({
+          type: 'object',
+          properties: {
+            url:   { type: 'string', description: 'The starting URL' },
+            task:  { type: 'string', description: 'Plain-English description of what to do' },
+            steps: {
+              type: 'array',
+              description: 'Ordered list of browser actions',
+              items: {
+                type: 'object',
+                properties: {
+                  action:   { type: 'string', enum: ['click','fill','wait','extract','submit'], description: 'Action to perform' },
+                  selector: { type: 'string', description: 'CSS selector for the target element' },
+                  value:    { type: 'string', description: 'Value for fill action' },
+                },
+                required: ['action'],
+                additionalProperties: false,
+              },
+            },
+            credentials: {
+              type: 'object',
+              description: 'Login credentials — only include when the user explicitly provided them',
+              properties: {
+                username: { type: 'string' },
+                password: { type: 'string' },
+              },
+              required: ['username', 'password'],
+              additionalProperties: false,
+            },
+          },
+          required: ['url', 'task'],
+          additionalProperties: false,
+        } as any),
+        execute: async (params: any) => {
+          const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
+          try {
+            const res = await fetch(`${fastApiUrl}/api/v1/browser/run`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(params),
+              signal: AbortSignal.timeout(65_000),
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({ detail: res.statusText }));
+              return { error: err.detail || 'Browser task failed' };
+            }
+            const data = await res.json();
+            // Strip screenshot from agent context — too large for model context
+            return { result: data.result, has_screenshot: !!data.screenshot };
+          } catch (err: any) {
+            const msg = String(err?.message ?? err);
+            const cause = String((err?.cause as any)?.code ?? '');
+            if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+              return { error: 'Browser task timed out after 65s — the page may be too slow or the task too complex.' };
+            }
+            if (cause === 'ECONNREFUSED' || msg.includes('fetch failed')) {
+              return {
+                error: `Browser service is not running at ${fastApiUrl}. Start it with \`docker compose up api\` (or \`make dev\`) and try again.`,
+              };
+            }
+            return { error: msg || 'Browser task failed' };
+          }
+        }
+      } as any),
       think: tool({
         description: 'Think through complex problems step-by-step before responding or calling other tools.',
         inputSchema: jsonSchema({
@@ -322,7 +398,7 @@ export async function POST(req: Request) {
       } as any),
 
       fetch_url: tool({
-        description: 'Fetch the text content of a URL. Use for reading web pages, articles, or documentation.',
+        description: 'Fetch the raw text of a static page when the user asks to read or summarize an article/documentation and no browser interaction is needed. NEVER use this when the user says open, go to, visit, log in, or click — those are browser_task.',
         inputSchema: jsonSchema({
           type: 'object',
           properties: {
@@ -523,10 +599,31 @@ export async function POST(req: Request) {
       }
     }
 
-    const sdkMessages = await convertToModelMessages(messages);
+    // Strip large render_widget results from message history before sending to the model.
+    // useChat includes previous turns' full tool results (kanban columns, html, etc.)
+    // in every follow-up request — these exceed SiliconFlow's payload limit → 400 Bad Request.
+    const sanitisedMessages = messages.map((msg: any) => {
+      if (!msg.toolInvocations?.length) return msg;
+      return {
+        ...msg,
+        toolInvocations: msg.toolInvocations.map((ti: any) => {
+          if (ti.toolName === 'render_widget' && ti.result && ti.state === 'result') {
+            return { ...ti, result: { type: ti.result.type, rendered: true } };
+          }
+          if (ti.toolName === 'browser_task' && ti.result && ti.state === 'result') {
+            return { ...ti, result: { result: ti.result.result, has_screenshot: ti.result.has_screenshot } };
+          }
+          if (ti.toolName === 'fetch_url' && ti.result?.text && ti.state === 'result') {
+            return { ...ti, result: { url: ti.result.url, text: ti.result.text.slice(0, 500), truncated: true } };
+          }
+          return ti;
+        }),
+      };
+    });
+    const sdkMessages = await convertToModelMessages(sanitisedMessages);
 
     const result = streamText({
-      model: getModel(apiKey),
+      model: getModel(apiKey, model),
       messages: sdkMessages,
       system: SYSTEM_PROMPT,
       // AI SDK v6 replaced `maxSteps` with `stopWhen`. Without this the model
@@ -535,17 +632,31 @@ export async function POST(req: Request) {
       stopWhen: stepCountIs(15),
       tools: dynamicTools,
       onFinish: async (info: any) => {
-        // Construct toolInvocations array
-        const toolInvocations = info.toolCalls?.map((call: any) => {
-          const result = info.toolResults?.find((r: any) => r.toolCallId === call.toolCallId);
+        // Aggregate tool calls/results across ALL steps. The top-level
+        // info.toolCalls only holds the FINAL step's calls — a multi-step agent
+        // that renders a widget in step 1 then writes a summary in a later step
+        // would otherwise lose the widget entirely (final step has no tool calls).
+        // AI SDK v6 also renamed the fields: tool calls use `.input` (was `.args`)
+        // and results use `.output` (was `.result`).
+        const allToolCalls: any[] = [];
+        const allToolResults: any[] = [];
+        for (const step of (info.steps ?? [])) {
+          if (step.toolCalls) allToolCalls.push(...step.toolCalls);
+          if (step.toolResults) allToolResults.push(...step.toolResults);
+        }
+        if (allToolCalls.length === 0 && info.toolCalls) allToolCalls.push(...info.toolCalls);
+        if (allToolResults.length === 0 && info.toolResults) allToolResults.push(...info.toolResults);
+
+        const toolInvocations = allToolCalls.map((call: any) => {
+          const res = allToolResults.find((r: any) => r.toolCallId === call.toolCallId);
           return {
             state: 'result',
             toolCallId: call.toolCallId,
             toolName: call.toolName,
-            args: call.args,
-            result: result ? result.result : undefined
+            args: call.input,
+            result: res ? res.output : undefined,
           };
-        }) || [];
+        });
 
         // Extract the full HTML of any generated html-canvas widget so it can be
         // re-rendered after reload. Only the completed result is read here (onFinish),
@@ -555,12 +666,48 @@ export async function POST(req: Request) {
         );
         const widgetHtml = htmlWidget ? htmlWidget.result.html : null;
 
+        // Persist structured widgets (kanban/dashboard/treemap/etc.) so they can be
+        // re-rendered after a reload. The full result is kept in the dedicated
+        // `widget` column (NOT in toolInvocations, which is sanitised below and re-sent
+        // to the model). Shape matches MessageBubble's live-render path:
+        // { type, params: <full tool result> }. html-canvas is handled via widgetHtml.
+        const structuredWidgetCall = toolInvocations.find(
+          (ti: any) =>
+            ti.toolName === 'render_widget' &&
+            ti.result?.type &&
+            ti.result.type !== 'html-canvas' &&
+            ti.result.type !== 'text'
+        );
+        const widget = structuredWidgetCall
+          ? { type: structuredWidgetCall.result.type, params: structuredWidgetCall.result }
+          : null;
+
+        // Strip render_widget payloads before saving to DB — the full kanban/dashboard/html
+        // data must not be re-sent to the model on follow-up turns (causes 400 Bad Request
+        // from SiliconFlow when the serialised tool result exceeds the payload size limit).
+        const sanitisedToolInvocations = toolInvocations.map((ti: any) => {
+          if (ti.toolName === 'render_widget' && ti.result) {
+            return { ...ti, result: { type: ti.result.type, rendered: true } };
+          }
+          if (ti.toolName === 'browser_task' && ti.result) {
+            // Strip screenshot (base64) from DB — only keep the text result
+            return { ...ti, result: { result: ti.result.result, has_screenshot: ti.result.has_screenshot } };
+          }
+          if (ti.toolName === 'fetch_url' && ti.result?.text) {
+            // Keep only an excerpt — the full 8000-char page text re-sent on
+            // follow-up turns exceeds SiliconFlow's payload limit (400 Bad Request)
+            return { ...ti, result: { url: ti.result.url, text: ti.result.text.slice(0, 500), truncated: true } };
+          }
+          return ti;
+        });
+
         // Save assistant message to DB
         await db.insert(messagesTable).values({
           chatId: activeChatId,
           role: 'assistant',
           content: info.text || '',
-          toolInvocations: toolInvocations,
+          toolInvocations: sanitisedToolInvocations,
+          widget,
           widgetHtml,
         });
 

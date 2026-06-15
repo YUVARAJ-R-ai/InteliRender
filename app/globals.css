@@ -68,6 +68,8 @@
 }
 
 :root {
+  --ir-font-size: 0.9375rem;
+  --ir-accent: #8AB4F8;
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-geist-mono: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Monaco, Consolas, monospace;
   --background: oklch(1 0 0);
@@ -102,6 +104,52 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* Light theme — mirrors .dark but with inverted surfaces */
+.light {
+  --bg-primary: #F8F9FA;
+  --bg-sidebar: #F1F3F4;
+  --bg-user-bubble: #E8EAED;
+  --bg-bot-bubble: transparent;
+  --bg-input: #E8EAED;
+  --bg-elevated: #FFFFFF;
+
+  --text-primary: #1A1C1E;
+  --text-muted: #5F6368;
+  --text-on-accent: #FFFFFF;
+
+  --accent: #1A73E8;
+  --accent-subtle: rgba(26, 115, 232, 0.08);
+  --accent-border: rgba(26, 115, 232, 0.15);
+
+  --border-default: rgba(0, 0, 0, 0.08);
+  --border-accent: rgba(26, 115, 232, 0.15);
+
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --card: var(--bg-elevated);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent);
+  --primary-foreground: var(--text-on-accent);
+  --secondary: var(--bg-user-bubble);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-user-bubble);
+  --muted-foreground: var(--text-muted);
+  --border: var(--border-default);
+  --input: var(--bg-input);
+  --ring: var(--accent);
+
+  --sidebar: var(--bg-sidebar);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--text-on-accent);
+  --sidebar-accent: var(--bg-user-bubble);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-default);
+  --sidebar-ring: var(--accent);
 }
 
 .dark {
@@ -254,3 +302,102 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #3D3F43;
 }
+
+/* ── Light theme palette remap ────────────────────────────────────────────────
+   The UI is painted with hardcoded hex utility classes (e.g. bg-[#1a1a1a]) rather
+   than semantic CSS variables, so toggling theme variables alone repaints nothing.
+   These rules remap the known "Midnight Focus" palette to light equivalents when
+   `html.light` is active. Unlayered rules outrank Tailwind's layered utilities, and
+   [class~="…" i] matches the arbitrary-value classes case-insensitively.
+   (Hover-state variants like hover:bg-[…] are intentionally left dark.) */
+
+/* Surfaces — background */
+html.light [class~="bg-[#1a1a1a]" i] { background-color: #ffffff; }
+html.light [class~="bg-[#1A1C1E]" i] { background-color: #ffffff; }
+html.light [class~="bg-[#1F2226]" i] { background-color: #f4f6f8; }
+html.light [class~="bg-[#111214]" i] { background-color: #f4f6f8; }
+html.light [class~="bg-[#141618]" i] { background-color: #f4f6f8; }
+html.light [class~="bg-[#141414]" i] { background-color: #f4f6f8; }
+html.light [class~="bg-[#161616]" i] { background-color: #f0f2f5; }
+html.light [class~="bg-[#1e1e1e]" i] { background-color: #eceef1; }
+html.light [class~="bg-[#1e2023]" i] { background-color: #eceef1; }
+html.light [class~="bg-[#242424]" i] { background-color: #edeff2; }
+html.light [class~="bg-[#2a2a2a]" i] { background-color: #e0e3e8; }
+html.light [class~="bg-[#2D2F33]" i] { background-color: #eceef1; }
+html.light [class~="bg-[#2e2e2e]" i] { background-color: #d7dbe1; }
+html.light [class~="bg-[#3a3a3a]" i] { background-color: #c6ccd4; }
+
+/* Surfaces — borders */
+html.light [class~="border-[#242424]" i] { border-color: #e0e3e8; }
+html.light [class~="border-[#2a2a2a]" i] { border-color: #dadee4; }
+html.light [class~="border-[#2e2e2e]" i] { border-color: #d2d6dd; }
+html.light [class~="border-[#3a3a3a]" i] { border-color: #c6ccd4; }
+html.light [class~="border-[#1e1e1e]" i] { border-color: #e6e8ec; }
+
+/* Text */
+html.light [class~="text-[#E8EDF2]" i] { color: #1a1c1e; }
+html.light [class~="text-[#C8CDD3]" i] { color: #3c4043; }
+html.light [class~="text-[#9CA3AF]" i] { color: #5f6368; }
+html.light [class~="text-[#A5A299]" i] { color: #5f6368; }
+html.light [class~="text-[#6B7280]" i] { color: #6e7378; }
+html.light [class~="text-[#4B5563]" i] { color: #9aa0a6; }
+
+/* Markdown (prose-invert renders light-on-dark; flip to dark text on light) */
+html.light .prose-invert {
+  --tw-prose-body: #1a1c1e;
+  --tw-prose-headings: #0b0c0d;
+  --tw-prose-bold: #0b0c0d;
+  --tw-prose-links: #1a73e8;
+  --tw-prose-quotes: #3c4043;
+  --tw-prose-bullets: #9aa0a6;
+  --tw-prose-counters: #6e7378;
+  --tw-prose-hr: #dee1e6;
+  --tw-prose-th-borders: #c6ccd4;
+  --tw-prose-td-borders: #dee1e6;
+  color: #1a1c1e;
+}
+
+/* Light-mode scrollbars */
+html.light ::-webkit-scrollbar-thumb { background: #c6ccd4; }
+html.light ::-webkit-scrollbar-thumb:hover { background: #aab2bd; }
+
+/* ── Light theme — interactive state variants ─────────────────────────────────
+   The base remap above does not cover hover:/focus: prefixed classes, so without
+   these rules hovering in light mode flashes the original dark surface. Each rule
+   matches the literal state-class token and re-applies the pseudo-class so the
+   override only fires on the actual interaction (not permanently). */
+
+/* Hover backgrounds */
+html.light [class~="hover:bg-[#242424]" i]:hover { background-color: #e0e3e8; }
+html.light [class~="hover:bg-[#1e2023]" i]:hover { background-color: #eceef1; }
+html.light [class~="hover:bg-[#2a2a2a]" i]:hover { background-color: #dadee4; }
+html.light [class~="hover:bg-[#2e2e2e]" i]:hover { background-color: #d7dbe1; }
+html.light [class~="hover:bg-[#3D3F43]" i]:hover { background-color: #c6ccd4; }
+html.light [class~="hover:bg-[#1e1e1e]" i]:hover { background-color: #eceef1; }
+html.light [class~="hover:bg-[#1a1a1a]" i]:hover { background-color: #f0f2f5; }
+
+/* Hover borders */
+html.light [class~="hover:border-[#3a3a3a]" i]:hover { border-color: #c6ccd4; }
+
+/* Hover text */
+html.light [class~="hover:text-[#E8EDF2]" i]:hover { color: #1a1c1e; }
+html.light [class~="hover:text-[#9CA3AF]" i]:hover { color: #5f6368; }
+html.light [class~="hover:text-[#C8CDD3]" i]:hover { color: #3c4043; }
+html.light [class~="group-hover:text-[#E8EDF2]" i] { color: inherit; }
+html.light .group:hover [class~="group-hover:text-[#E8EDF2]" i] { color: #1a1c1e; }
+
+/* ── Accent colour routing (theme-agnostic) ───────────────────────────────────
+   Reroute every hardcoded #8AB4F8 usage to var(--ir-accent), which is driven by
+   the accent swatch in Settings. Applies in both light and dark mode. */
+
+[class~="text-[#8AB4F8]" i]            { color: var(--ir-accent); }
+[class~="bg-[#8AB4F8]" i]              { background-color: var(--ir-accent); }
+[class~="border-[#8AB4F8]" i]          { border-color: var(--ir-accent); }
+[class~="hover:text-[#8AB4F8]" i]:hover           { color: var(--ir-accent); }
+[class~="hover:bg-[#8AB4F8]" i]:hover             { background-color: var(--ir-accent); }
+[class~="hover:bg-[#8AB4F8]/90" i]:hover          { background-color: color-mix(in srgb, var(--ir-accent) 90%, transparent); }
+[class~="hover:bg-[#8AB4F8]/10" i]:hover          { background-color: color-mix(in srgb, var(--ir-accent) 10%, transparent); }
+[class~="focus:border-[#8AB4F8]" i]:focus         { border-color: var(--ir-accent); }
+[class~="focus:border-[#8AB4F8]/40" i]:focus      { border-color: color-mix(in srgb, var(--ir-accent) 40%, transparent); }
+[class~="focus:ring-[#8AB4F8]/20" i]:focus        { --tw-ring-color: color-mix(in srgb, var(--ir-accent) 20%, transparent); }
+[class~="focus-visible:ring-[#8AB4F8]/40" i]:focus-visible { --tw-ring-color: color-mix(in srgb, var(--ir-accent) 40%, transparent); }
