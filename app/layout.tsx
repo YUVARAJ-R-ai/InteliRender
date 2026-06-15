@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 // Applied before React hydrates — prevents a flash of wrong theme on load.
-const themeScript = `(function(){try{var s=JSON.parse(localStorage.getItem('ir_settings')||'{}');var t=s.theme||'dark';var dark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',dark);document.documentElement.classList.toggle('light',!dark);document.documentElement.setAttribute('data-theme',dark?'dark':'light');var fs={'sm':'0.8125rem','md':'0.9375rem','lg':'1.0625rem'};document.documentElement.style.setProperty('--ir-font-size',fs[s.fontSize]||'0.9375rem');}catch(e){}})();`;
+const themeScript = `(function(){try{var s=JSON.parse(localStorage.getItem('ir_settings')||'{}');var t=s.theme||'dark';var dark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',dark);document.documentElement.classList.toggle('light',!dark);document.documentElement.setAttribute('data-theme',dark?'dark':'light');var fs={'sm':'0.8125rem','md':'0.9375rem','lg':'1.0625rem'};document.documentElement.style.setProperty('--ir-font-size',fs[s.fontSize]||'0.9375rem');if(s.accentColor)document.documentElement.style.setProperty('--ir-accent',s.accentColor);}catch(e){}})();`;
 
 export default function RootLayout({
   children,

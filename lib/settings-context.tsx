@@ -88,6 +88,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [settings.fontSize]);
 
   useEffect(() => {
+    document.documentElement.style.setProperty('--ir-accent', settings.accentColor);
+  }, [settings.accentColor]);
+
+  useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
 
