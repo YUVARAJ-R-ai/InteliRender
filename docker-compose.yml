@@ -30,6 +30,15 @@ services:
       - app_network
     restart: unless-stopped
 
+  mcp-server:
+    build: ./services/mcp-server
+    container_name: intellirender_mcp_server
+    ports:
+      - "8001:8001"
+    networks:
+      - app_network
+    restart: unless-stopped
+
   frontend:
     build:
       context: .
@@ -40,12 +49,14 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/intellirender}
       - FASTAPI_URL=http://api:8000
+      - MCP_SERVER_URL=http://mcp-server:8001/mcp
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
     depends_on:
       - db
       - api
+      - mcp-server
     networks:
       - app_network
     restart: unless-stopped

@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { auth } from '@/auth';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { db } from '@/lib/db';
 import { messages as messagesTable, chats } from '@/lib/db/schema';
 import { getAppConfig } from '@/lib/app-config';
@@ -482,6 +483,29 @@ export async function POST(req: Request) {
         } catch (mcpErr) {
           console.error(`Failed to load MCP server ${server.name}:`, mcpErr);
         }
+      }
+    }
+
+    // Auto-connect to the internal MCP server (services/mcp-server) when MCP_SERVER_URL is set.
+    // No manual drawer registration needed — tools appear automatically in every chat session.
+    if (process.env.MCP_SERVER_URL) {
+      try {
+        const transport = new StreamableHTTPClientTransport(new URL(process.env.MCP_SERVER_URL));
+        const client = new Client({ name: 'intellirender-mcp-server', version: '1.0.0' }, { capabilities: {} });
+        await client.connect(transport);
+        mcpClients.push(client);
+        mcpClientMap['intellirender-mcp-server'] = client;
+
+        const toolsResult = await client.listTools();
+        for (const mcpTool of toolsResult.tools) {
+          dynamicTools[mcpTool.name] = tool({
+            description: mcpTool.description || '',
+            inputSchema: jsonSchema(mcpTool.inputSchema as any),
+            execute: async (args: any) => client.callTool({ name: mcpTool.name, arguments: args }),
+          });
+        }
+      } catch (err) {
+        console.error('Failed to connect to internal MCP server:', err);
       }
     }
 
