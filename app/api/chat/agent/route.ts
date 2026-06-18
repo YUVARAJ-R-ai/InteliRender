@@ -40,15 +40,7 @@ const DB_MCP_SERVICE_CONFIGS: Record<string, {
     args: ['-y', '@linear/mcp-server'],
     envKey: 'LINEAR_API_KEY',
   },
-  google_forms: {
-    command: 'node',
-    args: ['/mnt/drive1/projects/google-forms-mcp/build/index.js'],
-    envKey: 'GOOGLE_REFRESH_TOKEN',
-    appConfigEnv: {
-      google_client_id: 'GOOGLE_CLIENT_ID',
-      google_client_secret: 'GOOGLE_CLIENT_SECRET',
-    },
-  },
+  // TODO(#41): google_forms removed — replace with custom MCP server (see issue #42)
   gmail: {
     command: 'npx',
     args: ['-y', 'mcp-gmail'],
@@ -154,28 +146,6 @@ TOOL SELECTION RULES:
 - Math / financial calculations: use calculate before building a widget with numbers.
 - Export data as CSV: use generate_csv, then reply with the returned dataUrl as a markdown download link.
 - Complex reasoning: use think before acting.
-- Google Forms: ALWAYS use create_google_form (the compound tool). NEVER call google_forms_create_form or google_forms_add_text_question directly — the compound tool handles everything in one shot.
-
-GOOGLE FORMS — HOW TO USE:
-Call create_google_form ONCE with the full form structure:
-{
-  "title": "Form Title",
-  "description": "Optional description",
-  "questions": [
-    { "title": "Name", "type": "text", "required": true },
-    { "title": "Employee ID", "type": "text", "required": true },
-    { "title": "Role", "type": "multiple_choice", "options": ["Engineer","Manager","Designer"], "required": false }
-  ]
-}
-AFTER create_google_form returns you MUST reply with a text message. Never end your turn silently after a tool call.
-Your reply MUST follow this exact format — no exceptions:
-
-✅ Your form is ready!
-
-**[Open Form →](RESPONDER_URI)**
-[Edit Form](EDIT_URI)
-
-Replace RESPONDER_URI and EDIT_URI with the values from the tool result.
 `;
 
 function getMessageContent(m: any): string {
@@ -467,90 +437,6 @@ export async function POST(req: Request) {
         }
       } as any),
 
-      // Compound tool: creates a complete Google Form with all questions in one shot.
-      // The model supplies all fields upfront; this tool handles the full MCP call chain
-      // internally so the model never needs to manually chain create_form + add_*_question.
-      create_google_form: tool({
-        description: 'Create a complete Google Form with all fields/questions in one call. Use this for ANY Google Forms request — do NOT use the raw google_forms_* MCP tools directly.',
-        inputSchema: jsonSchema({
-          type: 'object',
-          properties: {
-            title: { type: 'string', description: 'Form title' },
-            description: { type: 'string', description: 'Optional form description shown at the top' },
-            questions: {
-              type: 'array',
-              description: 'All questions to add to the form',
-              items: {
-                type: 'object',
-                properties: {
-                  title:    { type: 'string', description: 'Question text' },
-                  type:     { type: 'string', enum: ['text', 'multiple_choice'], description: 'text = short answer; multiple_choice = radio buttons' },
-                  options:  { type: 'array', items: { type: 'string' }, description: 'Required for multiple_choice questions' },
-                  required: { type: 'boolean', description: 'Whether the question is mandatory' },
-                },
-                required: ['title', 'type'],
-                additionalProperties: false,
-              },
-            },
-          },
-          required: ['title', 'questions'],
-          additionalProperties: false,
-        } as any),
-        execute: async ({ title, description, questions }: any) => {
-          // Find the connected Google Forms MCP client
-          const client =
-            mcpClientMap['Google Forms'] ||
-            mcpClientMap['google_forms'] ||
-            mcpClientMap['google-forms'] ||
-            Object.values(mcpClientMap).find((_, k) =>
-              Object.keys(mcpClientMap)[k]?.toLowerCase().includes('form')
-            );
-
-          if (!client) {
-            return { error: 'Google Forms is not connected. Go to Settings → Integrations → Google Forms and paste your refresh token.' };
-          }
-
-          try {
-            // Step 1: create the form (title only, then description via batchUpdate)
-            const createResult = await client.callTool({
-              name: 'create_form',
-              arguments: { title, ...(description ? { description } : {}) },
-            });
-            const createText = (createResult.content as any)[0]?.text ?? '{}';
-            const formData = JSON.parse(createText);
-            const formId: string = formData.formId;
-            if (!formId) return { error: 'Form creation failed: no formId returned', raw: createText };
-
-            // Step 2: add all questions sequentially
-            const results: string[] = [];
-            for (const q of (questions ?? [])) {
-              if (q.type === 'multiple_choice') {
-                await client.callTool({
-                  name: 'add_multiple_choice_question',
-                  arguments: { formId, questionTitle: q.title, options: q.options ?? [], required: q.required ?? false },
-                });
-              } else {
-                await client.callTool({
-                  name: 'add_text_question',
-                  arguments: { formId, questionTitle: q.title, required: q.required ?? false },
-                });
-              }
-              results.push(q.title);
-            }
-
-            return {
-              success: true,
-              formId,
-              questionsAdded: results,
-              responderUri: formData.responderUri,
-              editUri: formData.editUri,
-              message: `Form created. Reply to the user with this exact markdown:\n\n✅ Your form is ready!\n\n**[Open Form →](${formData.responderUri})**\n[Edit Form](${formData.editUri})`,
-            };
-          } catch (err: any) {
-            return { error: `Form creation failed: ${err.message}` };
-          }
-        }
-      } as any),
     };
 
     // Load custom MCP servers (UI-registered + DB-connected)
