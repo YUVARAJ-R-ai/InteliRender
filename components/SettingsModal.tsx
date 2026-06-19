@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Monitor, Sun, Moon, Type, LayoutGrid, Zap, Key, Plug, Eye, EyeOff, CheckCircle, Circle, Loader2, Trash2, GitBranch, FileText, Layers, Upload, ShieldCheck, Mail, HardDrive, Calendar, CreditCard, Database, MessageSquare } from 'lucide-react';
+import { X, Monitor, Sun, Moon, Type, LayoutGrid, Zap, Key, Plug, Eye, EyeOff, CheckCircle, Circle, Loader2, Trash2, GitBranch, FileText, Layers, ClipboardList, Upload, ShieldCheck, Mail, HardDrive, Calendar, CreditCard, Database, MessageSquare } from 'lucide-react';
 import { useSettings } from '@/lib/settings-context';
 
 const ACCENT_SWATCHES = [
@@ -316,6 +316,14 @@ type IntegrationDef =
 const INTEGRATION_DEFS: IntegrationDef[] = [
   // ── Google services (OAuth) ──
   {
+    service: 'google_forms',
+    label: 'Google Forms',
+    icon: ClipboardList,
+    description: 'Create & manage forms in your own Google account.',
+    authType: 'oauth',
+    oauthPath: '/api/auth/google-forms',
+  },
+  {
     service: 'gmail',
     label: 'Gmail',
     icon: Mail,
@@ -389,9 +397,16 @@ export function IntegrationsSection({ oauthResult }: { oauthResult?: { connected
 
   return (
     <div className="space-y-3 pb-2">
+      {oauthResult?.connected === 'google_forms' && (
+        <div className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-[11px] text-emerald-400">
+          Google Forms connected successfully.
+        </div>
+      )}
       {oauthResult?.error && (
         <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-[11px] text-red-400">
-          Connection failed. Please try again.
+          {oauthResult.error === 'google_forms_denied' && 'Authorization was cancelled.'}
+          {oauthResult.error === 'google_forms_no_refresh' && 'No refresh token received. Revoke app access in your Google account settings and try again.'}
+          {!['google_forms_denied', 'google_forms_no_refresh'].includes(oauthResult.error) && 'Connection failed. Please try again.'}
         </div>
       )}
       <GoogleOAuthCard />

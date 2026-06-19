@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { mcpConnections } from '@/lib/db/schema';
 import { encrypt } from '@/lib/encryption';
 
-const SUPPORTED_SERVICES = ['github', 'linear', 'notion', 'google_drive', 'gmail', 'google_calendar', 'stripe', 'postgres', 'slack'];
+const SUPPORTED_SERVICES = ['github', 'linear', 'notion', 'google_forms', 'google_drive', 'gmail', 'google_calendar', 'stripe', 'postgres', 'slack'];
 
 /**
  * POST /api/settings/mcp/[service] — connect a service with a token/PAT.
