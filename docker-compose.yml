@@ -35,6 +35,8 @@ services:
     container_name: intellirender_mcp_server
     ports:
       - "8001:8001"
+    environment:
+      - EXA_API_KEY=${EXA_API_KEY:-}
     networks:
       - app_network
     restart: unless-stopped
