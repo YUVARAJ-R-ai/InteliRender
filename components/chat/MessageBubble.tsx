@@ -271,9 +271,14 @@ export const MessageBubble = memo(function MessageBubble({
                         <div className="flex items-center gap-2 text-xs font-semibold text-[#8AB4F8]">
                           <div className={`w-1.5 h-1.5 rounded-full ${isCall ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400'}`} />
                           <span>
-                            {isCall 
-                              ? `Searching the web for "${ti.args.query || ''}"...` 
-                              : `Web search complete for "${ti.args.query || ''}"`}
+                            {(() => {
+                              // args isn't populated yet while the call streams; MCP tools
+                              // expose inputs under `input` rather than `args`.
+                              const query = (ti.args ?? ti.input)?.query ?? '';
+                              return isCall
+                                ? `Searching the web for "${query}"...`
+                                : `Web search complete for "${query}"`;
+                            })()}
                           </span>
                         </div>
                         {!isCall && Array.isArray(ti.result) && (
