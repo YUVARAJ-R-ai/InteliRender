@@ -1,7 +1,7 @@
 import { tool, jsonSchema } from 'ai';
 
 export const generateCsv = tool({
-  description: 'Generate a downloadable CSV from structured data. Returns a data URI — reply with it as a markdown link: [Download CSV](dataUrl).',
+  description: 'Generate a downloadable CSV from structured data. The UI automatically renders a download button from the result, so just tell the user their CSV is ready — do NOT put a link, URL, or the data URI in your reply.',
   inputSchema: jsonSchema({
     type: 'object',
     properties: {
