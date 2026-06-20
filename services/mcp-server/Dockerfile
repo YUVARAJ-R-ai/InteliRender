@@ -6,4 +6,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install --with-deps chromium
 COPY . .
 EXPOSE 8001
-CMD ["python", "main.py"]
+CMD ["python", "run.py"]

@@ -22,5 +22,6 @@ for _mod in pkgutil.iter_modules([str(_tools_pkg)]):
         continue
     importlib.import_module(f"tools.{_mod.name}")
 
-if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+# NOTE: do NOT run this file directly (`python main.py`). The server is started
+# via run.py so the tools (which `from main import mcp`) register on the SAME
+# instance that is served. See run.py for the full explanation.
