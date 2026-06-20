@@ -4,7 +4,14 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("IntelliRender MCP Server")
+# host/port/path are constructor settings in mcp>=1.8 — FastMCP.run() no longer
+# accepts them as kwargs.
+mcp = FastMCP(
+    "IntelliRender MCP Server",
+    host="0.0.0.0",
+    port=8001,
+    streamable_http_path="/mcp",
+)
 
 # Auto-import every module under tools/ so their @mcp.tool() decorators fire.
 # Skip *_stdio modules: those are standalone stdio MCP servers spawned per-request
@@ -16,4 +23,4 @@ for _mod in pkgutil.iter_modules([str(_tools_pkg)]):
     importlib.import_module(f"tools.{_mod.name}")
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=8001, path="/mcp")
+    mcp.run(transport="streamable-http")
