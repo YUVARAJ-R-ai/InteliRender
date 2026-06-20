@@ -35,6 +35,7 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
   const [selectedMentionIdx, setSelectedMentionIdx] = useState(0);
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Mirror of selectedModel so the memoized agent transport body callback can
   // read the latest value without the transport being recreated.
@@ -322,11 +323,30 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
 
   const isAgentLoading = agentStatus === 'submitted' || agentStatus === 'streaming';
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom — but only while the user is already pinned near the
+  // bottom. If they scroll up to read earlier output, we stop yanking them down
+  // on every streamed token, so they can scroll freely during generation.
   const isLoading = isStandardLoading || isAgentLoading;
+  const isAtBottomRef = useRef(true);
+
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]'
+    );
+    if (!viewport) return;
+    const onScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = viewport;
+      isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 80;
+    };
+    viewport.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => viewport.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (isAtBottomRef.current && bottomRef.current) {
+      // Instant (not smooth) during streaming — smooth scrolls queue up per token and stutter.
+      bottomRef.current.scrollIntoView({ behavior: isLoading ? 'auto' : 'smooth' });
     }
   }, [displayMessages, isLoading]);
 
@@ -683,7 +703,7 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
       </div>
 
       {/* Main Chat Area */}
-      <ScrollArea className="flex-1 min-h-0 relative w-full bg-[#1a1a1a]">
+      <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0 relative w-full bg-[#1a1a1a]">
         <div className="w-full max-w-[48rem] mx-auto px-4 py-6 max-sm:max-w-full max-sm:px-3 max-sm:py-4 flex flex-col min-h-full">
           {displayMessages.length === 0 ? (
             /* Empty state: grounded card, positioned at ~45% from top */
