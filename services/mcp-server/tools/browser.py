@@ -25,22 +25,46 @@ _BROWSER_TIMEOUT_SECONDS = 60
 @mcp.tool()
 async def web_search(query: str) -> list[dict]:
     """Search the web for up-to-date information. Returns a list of {title, snippet}."""
-    api_key = os.environ.get("EXA_API_KEY")
-    if not api_key:
-        return [{"title": "Mock Result", "snippet": "Add EXA_API_KEY to .env for real search results."}]
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            res = await client.post(
-                "https://api.exa.ai/search",
-                headers={"Content-Type": "application/json", "x-api-key": api_key},
-                json={"query": query, "numResults": 3},
-            )
-            if res.status_code != 200:
-                raise RuntimeError("Search failed")
-            data = res.json()
-            return [{"title": r.get("title"), "snippet": r.get("text") or r.get("snippet")} for r in data.get("results", [])]
-    except Exception:
-        return [{"title": "Error", "snippet": "Search failed to execute."}]
+    tavily_key = os.environ.get("TAVILY_API_KEY")
+    exa_key = os.environ.get("EXA_API_KEY")
+
+    if tavily_key:
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                res = await client.post(
+                    "https://api.tavily.com/search",
+                    headers={
+                        "Authorization": f"Bearer {tavily_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"query": query, "max_results": 5, "search_depth": "basic"},
+                )
+                if res.status_code != 200:
+                    raise RuntimeError(f"Tavily HTTP {res.status_code}: {res.text[:200]}")
+                data = res.json()
+                return [
+                    {"title": r.get("title"), "snippet": r.get("content"), "url": r.get("url")}
+                    for r in data.get("results", [])
+                ]
+        except Exception as err:
+            return [{"title": "Error", "snippet": f"Tavily search failed: {err}"}]
+
+    if exa_key:
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                res = await client.post(
+                    "https://api.exa.ai/search",
+                    headers={"Content-Type": "application/json", "x-api-key": exa_key},
+                    json={"query": query, "numResults": 3},
+                )
+                if res.status_code != 200:
+                    raise RuntimeError("Search failed")
+                data = res.json()
+                return [{"title": r.get("title"), "snippet": r.get("text") or r.get("snippet")} for r in data.get("results", [])]
+        except Exception:
+            return [{"title": "Error", "snippet": "Search failed to execute."}]
+
+    return [{"title": "Mock Result", "snippet": "Add TAVILY_API_KEY (or EXA_API_KEY) to the mcp-server env for real search results."}]
 
 
 @mcp.tool()
