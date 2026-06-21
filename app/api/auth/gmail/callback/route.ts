@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const state = searchParams.get('state');
   const error = searchParams.get('error');
 
-  const returnUrl = new URL('/', req.url);
+  const returnUrl = new URL('/admin', req.url);
   returnUrl.searchParams.set('settings', 'Integrations');
 
   if (error) { returnUrl.searchParams.set('error', 'gmail_denied'); return NextResponse.redirect(returnUrl); }

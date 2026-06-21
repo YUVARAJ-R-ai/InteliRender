@@ -211,7 +211,7 @@ export function ApiKeysSection() {
 
 // ── Google OAuth app credentials card ────────────────────────────────────────
 
-function GoogleOAuthCard() {
+export function GoogleOAuthCard() {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -357,7 +357,7 @@ const INTEGRATION_DEFS: IntegrationDef[] = [
   { service: 'slack',    label: 'Slack',    icon: MessageSquare, description: 'Read channels, send messages, search',        authType: 'pat', placeholder: 'xoxb-...', hint: 'Create a Bot token at api.slack.com/apps → OAuth & Permissions. Also paste your Team ID (Settings tab) in the field below.' },
 ];
 
-export function IntegrationsSection({ oauthResult }: { oauthResult?: { connected?: string; error?: string } }) {
+export function IntegrationsSection({ oauthResult, showGoogleOAuth = true }: { oauthResult?: { connected?: string; error?: string }; showGoogleOAuth?: boolean }) {
   const [connections, setConnections] = useState<Record<string, { status: string; lastSynced: string | null }>>({});
   const [tokenInputs, setTokenInputs] = useState<Record<string, string>>({});
   const [connecting, setConnecting] = useState<Record<string, boolean>>({});
@@ -409,7 +409,7 @@ export function IntegrationsSection({ oauthResult }: { oauthResult?: { connected
           {!['google_forms_denied', 'google_forms_no_refresh'].includes(oauthResult.error) && 'Connection failed. Please try again.'}
         </div>
       )}
-      <GoogleOAuthCard />
+      {showGoogleOAuth && <GoogleOAuthCard />}
       <p className="text-[11px] text-[#6B7280] leading-relaxed">
         Connected services are automatically available as tools in Agent Loop mode — no manual MCP registration needed.
       </p>
