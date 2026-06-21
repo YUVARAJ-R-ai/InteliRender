@@ -15,8 +15,7 @@ export async function GET(req: NextRequest) {
   const state = searchParams.get('state');
   const error = searchParams.get('error');
 
-  const returnUrl = new URL('/admin', req.url);
-  returnUrl.searchParams.set('settings', 'Integrations');
+  const returnUrl = new URL('/connectors', req.url);
 
   if (error) { returnUrl.searchParams.set('error', 'gcal_denied'); return NextResponse.redirect(returnUrl); }
 

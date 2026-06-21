@@ -1,36 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plug, Server, SlidersHorizontal, ArrowLeft } from 'lucide-react';
-import { IntegrationsSection, ApiKeysSection, GoogleOAuthCard } from '@/components/SettingsModal';
+import { useState } from 'react';
+import { Server, SlidersHorizontal, ArrowLeft } from 'lucide-react';
+import { ApiKeysSection, GoogleOAuthCard } from '@/components/SettingsModal';
 import { McpServersManager } from '@/components/admin/McpServersManager';
 
-type Tab = 'integrations' | 'mcp' | 'config';
+type Tab = 'mcp' | 'config';
 
 const TABS: { id: Tab; label: string; icon: React.ComponentType<any>; description: string }[] = [
-  { id: 'integrations', label: 'Integrations', icon: Plug, description: 'Connect OAuth & PAT services for Agent Loop tools' },
-  { id: 'mcp', label: 'MCP Servers', icon: Server, description: 'Manage custom stdio MCP server processes' },
-  { id: 'config', label: 'App Config', icon: SlidersHorizontal, description: 'Global credentials and API keys' },
+  { id: 'mcp', label: 'MCP Servers', icon: Server, description: 'Manage custom stdio MCP server processes (shared across all users)' },
+  { id: 'config', label: 'App Config', icon: SlidersHorizontal, description: 'Global credentials and API keys (Google OAuth, provider keys)' },
 ];
 
 export function AdminPanel({ adminEmail }: { adminEmail: string }) {
-  const [tab, setTab] = useState<Tab>('integrations');
-  const [oauthResult, setOauthResult] = useState<{ connected?: string; error?: string } | undefined>();
-
-  // Pick up the OAuth callback redirect (/admin?settings=Integrations&connected=...)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('settings') === 'Integrations') {
-      const connected = params.get('connected') ?? undefined;
-      const error = params.get('error') ?? undefined;
-      setOauthResult(connected || error ? { connected, error } : undefined);
-      setTab('integrations');
-      window.history.replaceState({}, '', '/admin');
-    }
-  }, []);
-
+  const [tab, setTab] = useState<Tab>('mcp');
   const active = TABS.find(t => t.id === tab)!;
 
   return (
@@ -50,7 +34,7 @@ export function AdminPanel({ adminEmail }: { adminEmail: string }) {
             <div>
               <h1 className="text-[24px] font-semibold tracking-tight text-[#E8EDF2]">Admin Panel</h1>
               <p className="text-[13px] text-[#6B7280] mt-1">
-                Configure integrations, MCP servers, and app-level settings.
+                App-level MCP servers and global credentials. Per-user integrations live in Connectors.
               </p>
             </div>
             <span className="text-[11px] text-[#4B5563] bg-[#161616] border border-[#242424] rounded-full px-3 py-1">
@@ -85,9 +69,6 @@ export function AdminPanel({ adminEmail }: { adminEmail: string }) {
 
         {/* Content */}
         <div className="ir-fade-in">
-          {tab === 'integrations' && (
-            <IntegrationsSection oauthResult={oauthResult} showGoogleOAuth={false} />
-          )}
           {tab === 'mcp' && <McpServersManager />}
           {tab === 'config' && (
             <div className="space-y-6">

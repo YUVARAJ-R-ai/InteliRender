@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import {
   Plus, MessageSquare, Trash2, GitBranch, Archive,
-  ChevronUp, LogOut, Pencil, Shield,
+  ChevronUp, LogOut, Pencil, Shield, Plug,
 } from 'lucide-react';
 
 type Chat = { id: number; title: string; createdAt: string };
@@ -205,6 +205,13 @@ export function Sidebar({
             Tools
           </div>
           <div className="space-y-0.5 mt-1">
+            <Link
+              href="/connectors"
+              className="w-full flex items-center gap-2.5 px-2 py-1.75 rounded-md text-[13px] text-left text-[#9CA3AF] hover:bg-[#1e2023] hover:text-[#E8EDF2] transition-all duration-150"
+            >
+              <Plug className="w-[15px] h-[15px] shrink-0 text-[#8AB4F8]" />
+              <span>Connectors</span>
+            </Link>
             <Link
               href="/admin"
               className="w-full flex items-center gap-2.5 px-2 py-1.75 rounded-md text-[13px] text-left text-[#9CA3AF] hover:bg-[#1e2023] hover:text-[#E8EDF2] transition-all duration-150"
