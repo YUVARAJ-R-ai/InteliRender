@@ -1,26 +1,14 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 import {
   Plus, MessageSquare, Trash2, GitBranch, Archive,
-  Trash, ChevronUp, LogOut, Pencil,
-  Zap, Key, Wrench,
+  ChevronUp, LogOut, Pencil, Shield,
 } from 'lucide-react';
-import { Drawer } from '@/components/Drawer';
-import { ApiKeysSection, IntegrationsSection } from '@/components/SettingsModal';
-
-type DrawerKind = 'integrations' | 'apikeys' | 'mcp' | null;
 
 type Chat = { id: number; title: string; createdAt: string };
-
-interface McpServer {
-  id: string;
-  name: string;
-  command: string;
-  args: string[];
-  isEnabled: boolean;
-}
 
 export function Sidebar({
   activeChatId,
@@ -35,9 +23,6 @@ export function Sidebar({
 }) {
   const { data: session } = useSession();
   const [chats, setChats] = useState<Chat[]>([]);
-  const [activeDrawer, setActiveDrawer] = useState<DrawerKind>(null);
-  const [oauthResult, setOauthResult] = useState<{ connected?: string; error?: string } | undefined>();
-  const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Rename state
@@ -48,10 +33,6 @@ export function Sidebar({
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ chatId: number; x: number; y: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
-
-  const [name, setName] = useState('');
-  const [command, setCommand] = useState('');
-  const [args, setArgs] = useState('');
 
   const loadChats = async () => {
     try {
@@ -94,20 +75,6 @@ export function Sidebar({
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  // Auto-open the Integrations drawer when returning from an OAuth flow
-  // (the OAuth callback redirects to /?settings=Integrations&connected=...).
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('settings') === 'Integrations') {
-      const connected = params.get('connected') ?? undefined;
-      const error = params.get('error') ?? undefined;
-      setOauthResult(connected || error ? { connected, error } : undefined);
-      setActiveDrawer('integrations');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
-
   // Focus rename input when it appears
   useEffect(() => {
     if (renamingChatId !== null) {
@@ -139,24 +106,6 @@ export function Sidebar({
     setContextMenu({ chatId: chat.id, x: e.clientX, y: e.clientY });
   };
 
-  // Load MCP servers once on mount — they don't depend on which chat is active.
-  useEffect(() => {
-    const stored = localStorage.getItem('mcp_servers');
-    if (stored) {
-      setMcpServers(JSON.parse(stored));
-    } else {
-      const defaults: McpServer[] = [{
-        id: 'builtin-memory',
-        name: 'Memory',
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-memory'],
-        isEnabled: true,
-      }];
-      localStorage.setItem('mcp_servers', JSON.stringify(defaults));
-      setMcpServers(defaults);
-    }
-  }, []);
-
   // Refresh the chat list on mount (prev is null) and when a new chat is
   // created (activeChatId transitions null → real id). Skip re-fetching on
   // ordinary chat switches (5 → 7) since the list hasn't changed.
@@ -168,34 +117,6 @@ export function Sidebar({
       loadChats();
     }
   }, [activeChatId]);
-
-  const handleAddMcpServer = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !command.trim()) return;
-    const newServer: McpServer = {
-      id: Date.now().toString(),
-      name: name.trim(),
-      command: command.trim(),
-      args: args.trim() ? args.trim().split(/\s+/).filter(Boolean) : [],
-      isEnabled: true,
-    };
-    const updated = [...mcpServers, newServer];
-    setMcpServers(updated);
-    localStorage.setItem('mcp_servers', JSON.stringify(updated));
-    setName(''); setCommand(''); setArgs('');
-  };
-
-  const handleToggleMcpServer = (id: string) => {
-    const updated = mcpServers.map(s => s.id === id ? { ...s, isEnabled: !s.isEnabled } : s);
-    setMcpServers(updated);
-    localStorage.setItem('mcp_servers', JSON.stringify(updated));
-  };
-
-  const handleDeleteMcpServer = (id: string) => {
-    const updated = mcpServers.filter(s => s.id !== id);
-    setMcpServers(updated);
-    localStorage.setItem('mcp_servers', JSON.stringify(updated));
-  };
 
   const userName = session?.user?.name ?? session?.user?.email ?? 'User';
   const userInitial = userName[0].toUpperCase();
@@ -284,27 +205,13 @@ export function Sidebar({
             Tools
           </div>
           <div className="space-y-0.5 mt-1">
-            <button
-              onClick={() => setActiveDrawer('integrations')}
+            <Link
+              href="/admin"
               className="w-full flex items-center gap-2.5 px-2 py-1.75 rounded-md text-[13px] text-left text-[#9CA3AF] hover:bg-[#1e2023] hover:text-[#E8EDF2] transition-all duration-150"
             >
-              <Zap className="w-[15px] h-[15px] shrink-0 text-[#8AB4F8]" />
-              <span>Integrations</span>
-            </button>
-            <button
-              onClick={() => setActiveDrawer('apikeys')}
-              className="w-full flex items-center gap-2.5 px-2 py-1.75 rounded-md text-[13px] text-left text-[#9CA3AF] hover:bg-[#1e2023] hover:text-[#E8EDF2] transition-all duration-150"
-            >
-              <Key className="w-[15px] h-[15px] shrink-0 text-[#8AB4F8]" />
-              <span>API Keys</span>
-            </button>
-            <button
-              onClick={() => setActiveDrawer('mcp')}
-              className="w-full flex items-center gap-2.5 px-2 py-1.75 rounded-md text-[13px] text-left text-[#9CA3AF] hover:bg-[#1e2023] hover:text-[#E8EDF2] transition-all duration-150"
-            >
-              <Wrench className="w-[15px] h-[15px] shrink-0 text-[#8AB4F8]" />
-              <span>MCP Servers</span>
-            </button>
+              <Shield className="w-[15px] h-[15px] shrink-0 text-[#8AB4F8]" />
+              <span>Admin Panel</span>
+            </Link>
           </div>
         </div>
 
@@ -366,116 +273,6 @@ export function Sidebar({
           />
         </button>
       </div>
-
-      {/* Integrations drawer */}
-      <Drawer
-        open={activeDrawer === 'integrations'}
-        onClose={() => { setActiveDrawer(null); setOauthResult(undefined); }}
-        title="Integrations"
-      >
-        <IntegrationsSection oauthResult={oauthResult} />
-      </Drawer>
-
-      {/* API Keys drawer */}
-      <Drawer
-        open={activeDrawer === 'apikeys'}
-        onClose={() => setActiveDrawer(null)}
-        title="API Keys"
-      >
-        <ApiKeysSection />
-      </Drawer>
-
-      {/* MCP Servers drawer */}
-      <Drawer
-        open={activeDrawer === 'mcp'}
-        onClose={() => setActiveDrawer(null)}
-        title="MCP Servers"
-      >
-        <p className="text-xs text-[#9CA3AF] leading-relaxed">
-          Configure Model Context Protocol (MCP) servers over Stdio.
-          These run as local child processes and expose custom tools to the LLM.
-        </p>
-
-        <div className="mt-4 space-y-2">
-          <h3 className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">Configured Servers</h3>
-          <div className="space-y-2">
-            {mcpServers.map(server => (
-              <div key={server.id} className="flex items-center justify-between bg-[#242424] border border-[#3a3a3a] rounded-xl p-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-[#E8EDF2]">{server.name}</span>
-                    {server.id === 'builtin-memory' && (
-                      <span className="text-[10px] bg-[#8AB4F8]/10 text-[#8AB4F8] border border-[#8AB4F8]/20 rounded px-1">Built-in</span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-[#6B7280] font-mono truncate mt-0.5">
-                    {server.command} {server.args.join(' ')}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 ml-4">
-                  <button
-                    onClick={() => handleToggleMcpServer(server.id)}
-                    className={`text-xs font-medium px-2 py-0.5 rounded transition-all cursor-pointer ${
-                      server.isEnabled
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                        : 'bg-[#2a2a2a] text-[#6B7280] border border-[#3a3a3a]'
-                    }`}
-                  >
-                    {server.isEnabled ? 'Enabled' : 'Disabled'}
-                  </button>
-                  {server.id !== 'builtin-memory' && (
-                    <button
-                      onClick={() => handleDeleteMcpServer(server.id)}
-                      className="text-[#6B7280] hover:text-red-400 p-1.5 rounded-lg hover:bg-red-400/10 transition-colors"
-                    >
-                      <Trash className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-            {mcpServers.length === 0 && (
-              <div className="text-xs text-[#6B7280] italic py-2">No servers configured.</div>
-            )}
-          </div>
-        </div>
-
-        <form onSubmit={handleAddMcpServer} className="mt-5 pt-4 border-t border-[#2a2a2a] flex flex-col gap-3">
-          <h3 className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">Add Local Server</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-[#9CA3AF] font-medium">Server Name</label>
-              <input
-                type="text" required placeholder="e.g. Memory Server"
-                value={name} onChange={(e) => setName(e.target.value)}
-                className="bg-[#242424] border border-[#3a3a3a] rounded-lg px-3 py-1.5 text-xs text-[#E8EDF2] focus:outline-none focus:border-[#8AB4F8] placeholder:text-[#6B7280]"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-[#9CA3AF] font-medium">Executable</label>
-              <input
-                type="text" required placeholder="e.g. npx, node"
-                value={command} onChange={(e) => setCommand(e.target.value)}
-                className="bg-[#242424] border border-[#3a3a3a] rounded-lg px-3 py-1.5 text-xs text-[#E8EDF2] focus:outline-none focus:border-[#8AB4F8] placeholder:text-[#6B7280]"
-              />
-            </div>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] text-[#9CA3AF] font-medium">Arguments (space separated)</label>
-            <input
-              type="text" placeholder="e.g. -y @modelcontextprotocol/server-memory"
-              value={args} onChange={(e) => setArgs(e.target.value)}
-              className="bg-[#242424] border border-[#3a3a3a] rounded-lg px-3 py-1.5 text-xs text-[#E8EDF2] focus:outline-none focus:border-[#8AB4F8] placeholder:text-[#6B7280]"
-            />
-          </div>
-          <button
-            type="submit"
-            className="w-full mt-2 bg-[#8AB4F8] hover:bg-white text-[#1a1a1a] text-xs font-semibold py-2 rounded-lg transition-colors cursor-pointer"
-          >
-            Add MCP Server
-          </button>
-        </form>
-      </Drawer>
 
       {/* Right-click context menu */}
       {contextMenu && (() => {
