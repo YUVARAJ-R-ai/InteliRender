@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Monitor, Sun, Moon, Type, LayoutGrid, Zap, Key, Plug, Eye, EyeOff, CheckCircle, Circle, Loader2, Trash2, GitBranch, FileText, Layers, ClipboardList, Upload, ShieldCheck, Mail, HardDrive, Calendar, CreditCard, Database, MessageSquare } from 'lucide-react';
+import { X, Monitor, Sun, Moon, Type, LayoutGrid, Zap, Key, Plug, Eye, EyeOff, CheckCircle, Circle, Loader2, Trash2, GitBranch, FileText, Layers, ClipboardList, Upload, ShieldCheck, Mail, HardDrive, Calendar, CreditCard, Database, MessageSquare, ChevronLeft } from 'lucide-react';
 import { useSettings } from '@/lib/settings-context';
 import { ConnectorsSection } from '@/components/connectors/ConnectorsSection';
 
@@ -500,8 +500,19 @@ export function SettingsModal({ onClose, initialSection, oauthResult }: {
   oauthResult?: { connected?: string; error?: string };
 }) {
   const [section, setSection] = useState<Section>(initialSection ?? 'Appearance');
+  // The last non-Connectors section, so the Connectors "back" button can return
+  // to where the user came from.
+  const [lastNav, setLastNav] = useState<Section>(
+    initialSection && initialSection !== 'Connectors' ? initialSection : 'Appearance',
+  );
   const { settings, set } = useSettings();
   const backdropRef = useRef<HTMLDivElement>(null);
+
+  const isConnectors = section === 'Connectors';
+  const goTo = (s: Section) => {
+    if (s !== 'Connectors') setLastNav(s);
+    setSection(s);
+  };
 
   // Escape to close
   useEffect(() => {
@@ -518,39 +529,54 @@ export function SettingsModal({ onClose, initialSection, oauthResult }: {
     >
       <div className="ir-fade-slide-up bg-[#1a1a1a] border border-[#2e2e2e] rounded-2xl w-full max-w-[940px] h-[86vh] max-h-[680px] flex overflow-hidden shadow-2xl">
 
-        {/* Left nav */}
-        <div className="w-[168px] shrink-0 border-r border-[#242424] flex flex-col bg-[#141414]">
-          <div className="px-4 pt-5 pb-3">
-            <h2 className="text-[13px] font-semibold text-[#E8EDF2]">Settings</h2>
+        {/* Left nav — collapses out when Connectors takes over the overlay */}
+        <div className={`shrink-0 overflow-hidden transition-[width,opacity] duration-300 ease-out ${isConnectors ? 'w-0 opacity-0' : 'w-[168px] opacity-100'}`}>
+          <div className="w-[168px] h-full border-r border-[#242424] flex flex-col bg-[#141414]">
+            <div className="px-4 pt-5 pb-3">
+              <h2 className="text-[13px] font-semibold text-[#E8EDF2]">Settings</h2>
+            </div>
+            <nav className="flex-1 px-2 space-y-0.5">
+              {NAV.map(({ label, icon: Icon }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => goTo(label)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-left transition-colors duration-150 ${
+                    section === label
+                      ? 'bg-[#2a2a2a] text-[#E8EDF2]'
+                      : 'text-[#6B7280] hover:text-[#9CA3AF] hover:bg-[#1e1e1e]'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  {label}
+                </button>
+              ))}
+            </nav>
+            <div className="px-4 pb-4 text-[10px] text-[#4B5563]">IntelliRender v0.1</div>
           </div>
-          <nav className="flex-1 px-2 space-y-0.5">
-            {NAV.map(({ label, icon: Icon }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setSection(label)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-left transition-colors duration-150 ${
-                  section === label
-                    ? 'bg-[#2a2a2a] text-[#E8EDF2]'
-                    : 'text-[#6B7280] hover:text-[#9CA3AF] hover:bg-[#1e1e1e]'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5 shrink-0" />
-                {label}
-              </button>
-            ))}
-          </nav>
-          <div className="px-4 pb-4 text-[10px] text-[#4B5563]">IntelliRender v0.1</div>
         </div>
 
         {/* Right content */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-[#242424] shrink-0">
-            <h3 className="text-[14px] font-semibold text-[#E8EDF2]">{section}</h3>
+            <div className="flex items-center gap-2 min-w-0">
+              {isConnectors && (
+                <button
+                  type="button"
+                  onClick={() => setSection(lastNav)}
+                  className="flex items-center gap-1 text-[12px] text-[#6B7280] hover:text-[#E8EDF2] -ml-1 pr-1 py-1 rounded-lg hover:bg-[#242424] transition-colors shrink-0"
+                  title="Back to settings"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Settings
+                </button>
+              )}
+              <h3 className="text-[14px] font-semibold text-[#E8EDF2] truncate">{section}</h3>
+            </div>
             <button
               type="button"
               onClick={onClose}
-              className="text-[#4B5563] hover:text-[#9CA3AF] p-1 rounded-lg hover:bg-[#242424] transition-colors"
+              className="text-[#4B5563] hover:text-[#9CA3AF] p-1 rounded-lg hover:bg-[#242424] transition-colors shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -639,7 +665,9 @@ export function SettingsModal({ onClose, initialSection, oauthResult }: {
             )}
 
             {section === 'Connectors' && (
-              <ConnectorsSection oauthResult={oauthResult} />
+              <div className="ir-fade-in">
+                <ConnectorsSection oauthResult={oauthResult} />
+              </div>
             )}
 
           </div>
