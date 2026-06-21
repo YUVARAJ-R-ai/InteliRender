@@ -5,6 +5,24 @@ function siliconflowClient(apiKey?: string) {
     baseURL: 'https://api.siliconflow.com/v1',
     // Per-user key from DB takes priority over env var
     apiKey: apiKey || process.env.SILICONFLOW_API_KEY,
+    // Disable "thinking" mode on every chat completion. SiliconFlow reasoning
+    // models (e.g. DeepSeek-V4-Flash) emit reasoning_content that MUST be echoed
+    // back on the next turn (error 20015) — which the AI SDK doesn't do, so the
+    // multi-step tool loop 400s right after a tool call. We don't use reasoning
+    // tokens; turning thinking off keeps tool calling working (and is harmless
+    // for non-thinking models, which ignore the flag).
+    fetch: async (url, options) => {
+      if (typeof url === 'string' && url.includes('/chat/completions') && typeof options?.body === 'string') {
+        try {
+          const body = JSON.parse(options.body);
+          body.enable_thinking = false;
+          options = { ...options, body: JSON.stringify(body) };
+        } catch {
+          /* not JSON — leave untouched */
+        }
+      }
+      return fetch(url, options);
+    },
   });
 }
 

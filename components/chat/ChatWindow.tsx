@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { MessageBubble } from './MessageBubble';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatMessage } from '@/types/widget';
-import { Send, AlertCircle, Sparkles, HelpCircle, LayoutGrid, BarChart2, GitMerge, CheckCircle, ChevronDown, Menu } from 'lucide-react';
+import { Send, Square, AlertCircle, Sparkles, HelpCircle, LayoutGrid, BarChart2, GitMerge, CheckCircle, ChevronDown, Menu } from 'lucide-react';
 import { UserMenu } from '@/components/UserMenu';
 import { useChat } from '@ai-sdk/react';
 import { BUILTIN_SKILLS, Skill } from '@/lib/skills';
@@ -35,6 +35,7 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
   const [selectedMentionIdx, setSelectedMentionIdx] = useState(0);
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Mirror of selectedModel so the memoized agent transport body callback can
   // read the latest value without the transport being recreated.
@@ -52,6 +53,8 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
   // clear/reload — the messages are already in local state (and streaming).
   // Without this guard the empty state flickers back for a frame on first send.
   const locallyCreatedChatIdRef = useRef<number | null>(null);
+  // Lets the user abort an in-flight Standard-mode request (Agent mode uses useChat's stop()).
+  const standardAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     chatIdRef.current = chatId;
@@ -141,6 +144,7 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
     setMessages: setAgentMessages,
     sendMessage: sendMessageAgent,
     status: agentStatus,
+    stop: stopAgent,
   } = useChat({
     transport: agentTransport,
     onError: (err) => {
@@ -319,11 +323,30 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
 
   const isAgentLoading = agentStatus === 'submitted' || agentStatus === 'streaming';
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom — but only while the user is already pinned near the
+  // bottom. If they scroll up to read earlier output, we stop yanking them down
+  // on every streamed token, so they can scroll freely during generation.
   const isLoading = isStandardLoading || isAgentLoading;
+  const isAtBottomRef = useRef(true);
+
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]'
+    );
+    if (!viewport) return;
+    const onScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = viewport;
+      isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 80;
+    };
+    viewport.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => viewport.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (isAtBottomRef.current && bottomRef.current) {
+      // Instant (not smooth) during streaming — smooth scrolls queue up per token and stutter.
+      bottomRef.current.scrollIntoView({ behavior: isLoading ? 'auto' : 'smooth' });
     }
   }, [displayMessages, isLoading]);
 
@@ -539,6 +562,8 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
       });
     } else {
       setIsStandardLoading(true);
+      const controller = new AbortController();
+      standardAbortRef.current = controller;
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
@@ -548,6 +573,7 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
             chatId,
             model: selectedModel,
           }),
+          signal: controller.signal,
         });
 
         if (!response.ok) {
@@ -580,12 +606,27 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
 
         setMessages(prev => [...prev, assistantMessage]);
       } catch (err: any) {
-        const msg = err?.message || 'Unexpected error';
-        setError(msg);
-        console.error('Chat error:', msg);
+        // User-initiated stop — not an error, just end quietly.
+        if (err?.name === 'AbortError') {
+          setError(null);
+        } else {
+          const msg = err?.message || 'Unexpected error';
+          setError(msg);
+          console.error('Chat error:', msg);
+        }
       } finally {
+        standardAbortRef.current = null;
         setIsStandardLoading(false);
       }
+    }
+  };
+
+  // Abort the current in-flight request (works in both Agent and Standard modes).
+  const handleStop = () => {
+    if (isAgentMode) {
+      stopAgent();
+    } else {
+      standardAbortRef.current?.abort();
     }
   };
 
@@ -662,7 +703,7 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
       </div>
 
       {/* Main Chat Area */}
-      <ScrollArea className="flex-1 min-h-0 relative w-full bg-[#1a1a1a]">
+      <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0 relative w-full bg-[#1a1a1a]">
         <div className="w-full max-w-[48rem] mx-auto px-4 py-6 max-sm:max-w-full max-sm:px-3 max-sm:py-4 flex flex-col min-h-full">
           {displayMessages.length === 0 ? (
             /* Empty state: grounded card, positioned at ~45% from top */
@@ -918,13 +959,25 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
                 )}
               </div>
 
-              <button
-                type="submit"
-                disabled={isLoading || !input.trim()}
-                className="ir-send-pulse w-[34px] h-[34px] bg-[#8AB4F8] hover:bg-white text-[#1a1a1a] flex items-center justify-center rounded-lg transition-all duration-150 disabled:opacity-35 disabled:hover:bg-[#8AB4F8] cursor-pointer shrink-0"
-              >
-                <Send className="w-[15px] h-[15px]" />
-              </button>
+              {isLoading ? (
+                <button
+                  type="button"
+                  onClick={handleStop}
+                  title="Stop generating"
+                  aria-label="Stop generating"
+                  className="w-[34px] h-[34px] bg-[#2D2F33] hover:bg-[#3a3d42] text-[#E8EDF2] flex items-center justify-center rounded-lg transition-all duration-150 cursor-pointer shrink-0 border border-white/10"
+                >
+                  <Square className="w-[13px] h-[13px] fill-current" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!input.trim()}
+                  className="ir-send-pulse w-[34px] h-[34px] bg-[#8AB4F8] hover:bg-white text-[#1a1a1a] flex items-center justify-center rounded-lg transition-all duration-150 disabled:opacity-35 disabled:hover:bg-[#8AB4F8] cursor-pointer shrink-0"
+                >
+                  <Send className="w-[15px] h-[15px]" />
+                </button>
+              )}
             </div>
           </div>
         </form>

@@ -28,6 +28,10 @@ For "text" type: the "text" field IS your full answer. Make it thorough and help
 For "gravity"/"kanban"/"dashboard": include a "params" field with realistic data.
 For "html-canvas": just include "type" and "text" (a one-liner description). The HTML will be generated separately.
 
+For "kanban", params MUST use this exact shape (a flat "columns" array — do NOT nest by sprint):
+{"columns":[{"title":"Backlog","color":"#888","tasks":[{"title":"Task name","priority":"high"}]},{"title":"In Progress","color":"#888","tasks":[]}]}
+priority is one of: "low" | "medium" | "high". For multi-sprint projects, prefix the task title with the sprint, e.g. "[Sprint 1] Define app goals".
+
 Examples:
 User: "hello" → {"type":"text","text":"Hello! How can I help you today?"}
 User: "create a kanban board" → {"type":"kanban","text":"Here's your project board.","params":{...}}

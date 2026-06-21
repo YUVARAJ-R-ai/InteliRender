@@ -1,37 +1,13 @@
-import { useState, useRef, useMemo, memo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { ChatMessage } from '@/types/widget';
 import { WidgetRenderer } from '@/components/widgets/WidgetRenderer';
-import { Trash2, Copy, Check, ThumbsUp, ThumbsDown, RotateCw } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import { HtmlCanvas } from '@/components/widgets/HtmlCanvas';
+import { Trash2, Copy, Check, ThumbsUp, ThumbsDown, RotateCw, Download } from 'lucide-react';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { formatDistanceToNow, format } from 'date-fns';
-
-/**
- * Renders a persisted HTML widget (loaded from `widget_html` after a reload) inside
- * a sandboxed iframe. The iframe height is set to the content's scrollHeight on load.
- */
-function PersistedHtmlWidget({ html }: { html: string }) {
-  const ref = useRef<HTMLIFrameElement>(null);
-  return (
-    <iframe
-      ref={ref}
-      srcDoc={html}
-      sandbox="allow-scripts allow-same-origin"
-      title="Saved widget"
-      style={{ width: '100%', border: 'none', borderRadius: '8px', minHeight: 120 }}
-      onLoad={() => {
-        try {
-          const doc = ref.current?.contentDocument;
-          if (doc?.body) ref.current!.style.height = `${doc.body.scrollHeight}px`;
-        } catch {
-          /* cross-origin guard — ignore */
-        }
-      }}
-    />
-  );
-}
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -99,11 +75,11 @@ export const MessageBubble = memo(function MessageBubble({
         </div>
       )}
 
-      {/* Message action container */}
-      <div 
-        className={`absolute top-[-12px] bg-[#1F2226] border border-white/8 rounded-lg p-[4px_6px] flex gap-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-20 shadow-lg ${
-          isUser ? 'right-0' : 'left-[2.5rem]'
-        }`}
+      {/* Message action container — anchored to the top-right of the hovered
+          message's own box (not top-[-12px], which bled up into the previous
+          message when consecutive messages share a 6px gap). */}
+      <div
+        className="absolute top-1 right-1 bg-[#1F2226] border border-white/8 rounded-lg p-[4px_6px] flex gap-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-20 shadow-lg"
       >
         {isUser ? (
           <>
@@ -182,8 +158,27 @@ export const MessageBubble = memo(function MessageBubble({
             {message.content ? (
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                // react-markdown strips data: URIs by default (security), which turned
+                // CSV download links into empty hrefs → navigation to localhost. Allow
+                // CSV data URIs through; everything else keeps the default sanitiser.
+                urlTransform={(url) => (url.startsWith('data:text/csv') ? url : defaultUrlTransform(url))}
                 components={{
                   a({ href, children, ...props }: any) {
+                    // data: URIs can't be navigated to in Chrome — use a real download.
+                    if (href?.startsWith('data:')) {
+                      const filename = href.startsWith('data:text/csv')
+                        ? 'export.csv'
+                        : 'download';
+                      return (
+                        <a
+                          href={href}
+                          download={filename}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#8AB4F8]/15 border border-[#8AB4F8]/30 text-[#8AB4F8] text-sm font-medium hover:bg-[#8AB4F8]/25 transition-colors cursor-pointer no-underline"
+                        >
+                          ↓ {children}
+                        </a>
+                      );
+                    }
                     return (
                       <a
                         href={href}
@@ -251,7 +246,8 @@ export const MessageBubble = memo(function MessageBubble({
                   const isThink = ti.toolName === 'think';
                   const isSearch = ti.toolName === 'web_search';
                   const isWidget = ti.toolName === 'render_widget';
-                  const isCustomMcp = !isThink && !isSearch && !isWidget;
+                  const isCsv = ti.toolName === 'generate_csv';
+                  const isCustomMcp = !isThink && !isSearch && !isWidget && !isCsv;
   
                   if (isThink) {
                     return (
@@ -275,9 +271,14 @@ export const MessageBubble = memo(function MessageBubble({
                         <div className="flex items-center gap-2 text-xs font-semibold text-[#8AB4F8]">
                           <div className={`w-1.5 h-1.5 rounded-full ${isCall ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400'}`} />
                           <span>
-                            {isCall 
-                              ? `Searching the web for "${ti.args.query || ''}"...` 
-                              : `Web search complete for "${ti.args.query || ''}"`}
+                            {(() => {
+                              // args isn't populated yet while the call streams; MCP tools
+                              // expose inputs under `input` rather than `args`.
+                              const query = (ti.args ?? ti.input)?.query ?? '';
+                              return isCall
+                                ? `Searching the web for "${query}"...`
+                                : `Web search complete for "${query}"`;
+                            })()}
                           </span>
                         </div>
                         {!isCall && Array.isArray(ti.result) && (
@@ -294,6 +295,37 @@ export const MessageBubble = memo(function MessageBubble({
                     );
                   }
   
+                  if (isCsv) {
+                    const url = ti.result?.dataUrl;
+                    const fname = ti.result?.filename || 'export.csv';
+                    const rows = ti.result?.rowCount;
+                    return (
+                      <div key={ti.toolCallId} className="bg-[#1F2226] border border-white/5 rounded-xl p-3 flex flex-col gap-2.5 w-full">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-[#8AB4F8]">
+                          <div className={`w-1.5 h-1.5 rounded-full ${isCall ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-400'}`} />
+                          <span>{isCall ? 'Generating CSV...' : 'CSV ready'}</span>
+                        </div>
+                        {!isCall && url && (
+                          // Real file download — <a download> on a data: URI works in
+                          // Chrome (unlike plain navigation, which it blocks). Rendered
+                          // straight from the tool result so it never depends on the
+                          // model reproducing the data URI in its text.
+                          <a
+                            href={url}
+                            download={fname}
+                            className="inline-flex items-center gap-2 self-start px-3.5 py-2 rounded-lg bg-[#8AB4F8]/15 border border-[#8AB4F8]/30 text-[#8AB4F8] text-sm font-medium hover:bg-[#8AB4F8]/25 transition-colors cursor-pointer no-underline"
+                          >
+                            <Download className="w-4 h-4" />
+                            <span>Download {fname}</span>
+                            {typeof rows === 'number' && (
+                              <span className="text-[#8AB4F8]/60 text-xs">· {rows} rows</span>
+                            )}
+                          </a>
+                        )}
+                      </div>
+                    );
+                  }
+
                   if (isCustomMcp) {
                     const displayName = ti.toolName.split('_').pop() || ti.toolName;
                     const prefix = ti.toolName.split('_').slice(0, -1).join(' ') || 'MCP';
@@ -321,13 +353,16 @@ export const MessageBubble = memo(function MessageBubble({
               </div>
             )}
             
-            {/* Widget rendering */}
+            {/* Widget rendering — reclaim the 2.5rem avatar gutter so the widget is
+                centered across the full chat column instead of inset to the left.
+                Persisted HTML uses the SAME HtmlCanvas as the live render so a reload
+                looks identical (fixed-height, internally scrollable — never cropped). */}
             {message.widgetHtml ? (
-              <div className={`w-full overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
-                <PersistedHtmlWidget html={message.widgetHtml} />
+              <div className={`w-[calc(100%+2.5rem)] -ml-[2.5rem] overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
+                <HtmlCanvas params={{ html: message.widgetHtml }} />
               </div>
             ) : widgetToRender ? (
-              <div className={`w-full overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
+              <div className={`w-[calc(100%+2.5rem)] -ml-[2.5rem] overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
                 <WidgetRenderer widget={widgetToRender as any} />
               </div>
             ) : null}
