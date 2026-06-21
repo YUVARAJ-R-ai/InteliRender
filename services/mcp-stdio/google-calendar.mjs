@@ -45,10 +45,16 @@ async function api(path, accessToken, init = {}) {
   return data;
 }
 
-/** Accept an ISO datetime ("2026-06-21T15:00:00") or a date ("2026-06-21"). */
-function toTimePoint(value) {
+/**
+ * Accept an ISO datetime ("2026-06-21T15:00:00") or a date ("2026-06-21").
+ * Google requires a timeZone when the dateTime has no UTC offset, so we always
+ * attach one (default UTC) to avoid "Missing time zone definition" errors.
+ */
+function toTimePoint(value, timeZone = 'UTC') {
   if (!value) return undefined;
-  return value.includes('T') ? { dateTime: value } : { date: value };
+  if (!value.includes('T')) return { date: value };
+  const hasOffset = /[zZ]|[+-]\d{2}:?\d{2}$/.test(value);
+  return hasOffset ? { dateTime: value } : { dateTime: value, timeZone };
 }
 
 async function listEvents({ timeMin, timeMax, maxResults = 10, calendarId = 'primary' }, token) {
@@ -71,26 +77,26 @@ async function listEvents({ timeMin, timeMax, maxResults = 10, calendarId = 'pri
   }));
 }
 
-async function createEvent({ summary, start, end, description, location, attendees, calendarId = 'primary' }, token) {
+async function createEvent({ summary, start, end, description, location, attendees, timeZone = 'UTC', calendarId = 'primary' }, token) {
   const body = {
     summary,
     description,
     location,
-    start: toTimePoint(start),
-    end: toTimePoint(end),
+    start: toTimePoint(start, timeZone),
+    end: toTimePoint(end, timeZone),
     ...(Array.isArray(attendees) && attendees.length ? { attendees: attendees.map((email) => ({ email })) } : {}),
   };
   const e = await api(`/calendars/${encodeURIComponent(calendarId)}/events`, token, { method: 'POST', body: JSON.stringify(body) });
   return { id: e.id, summary: e.summary, start: e.start?.dateTime ?? e.start?.date, htmlLink: e.htmlLink, status: 'created' };
 }
 
-async function updateEvent({ eventId, summary, start, end, description, location, calendarId = 'primary' }, token) {
+async function updateEvent({ eventId, summary, start, end, description, location, timeZone = 'UTC', calendarId = 'primary' }, token) {
   const body = {};
   if (summary !== undefined) body.summary = summary;
   if (description !== undefined) body.description = description;
   if (location !== undefined) body.location = location;
-  if (start) body.start = toTimePoint(start);
-  if (end) body.end = toTimePoint(end);
+  if (start) body.start = toTimePoint(start, timeZone);
+  if (end) body.end = toTimePoint(end, timeZone);
   const e = await api(`/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`, token, { method: 'PATCH', body: JSON.stringify(body) });
   return { id: e.id, summary: e.summary, start: e.start?.dateTime ?? e.start?.date, htmlLink: e.htmlLink, status: 'updated' };
 }
@@ -117,6 +123,7 @@ const TOOLS = [
       summary: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' },
       description: { type: 'string' }, location: { type: 'string' },
       attendees: { type: 'array', items: { type: 'string' }, description: 'Attendee email addresses' },
+      timeZone: { type: 'string', description: 'IANA timezone (e.g. "Asia/Kolkata"); defaults to UTC' },
     }, required: ['summary', 'start', 'end'], additionalProperties: false },
     handler: (a, t) => createEvent(a, t),
   },
@@ -126,6 +133,7 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {
       eventId: { type: 'string' }, summary: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' },
       description: { type: 'string' }, location: { type: 'string' },
+      timeZone: { type: 'string', description: 'IANA timezone (e.g. "Asia/Kolkata"); defaults to UTC' },
     }, required: ['eventId'], additionalProperties: false },
     handler: (a, t) => updateEvent(a, t),
   },
