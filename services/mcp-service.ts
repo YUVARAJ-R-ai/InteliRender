@@ -4,10 +4,33 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { db } from '@/lib/db';
-import { mcpConnections } from '@/lib/db/schema';
+import { mcpConnections, customMcpServers } from '@/lib/db/schema';
 import { decrypt } from '@/lib/encryption';
 import { getAppConfig } from '@/lib/app-config';
 import { MCP_SERVICE_CONFIGS } from '@/lib/mcp';
+
+/**
+ * Loads admin-managed custom MCP servers (stdio) from the DB. These replace the
+ * old per-browser localStorage list — every Agent Loop session spawns the
+ * enabled ones as stdio child processes.
+ */
+async function loadCustomMcpServers() {
+  const rows = await db
+    .select({
+      name: customMcpServers.name,
+      command: customMcpServers.command,
+      args: customMcpServers.args,
+    })
+    .from(customMcpServers)
+    .where(eq(customMcpServers.isEnabled, true));
+
+  return rows.map((s) => ({
+    name: s.name,
+    command: s.command,
+    args: s.args ?? [],
+    isEnabled: true,
+  }));
+}
 
 /** Loads connected MCP services from the DB and converts them to server descriptors */
 async function loadDbMcpServers(userId: string) {
@@ -68,7 +91,9 @@ export async function loadServers(
 
   // Auto-load MCP connections from DB so the agent can use them without manual registration
   const dbMcpServers = userId ? await loadDbMcpServers(userId) : [];
-  const allMcpServers = [...(clientMcpServers ?? []), ...dbMcpServers];
+  // Admin-managed custom stdio servers (replaces the old localStorage list)
+  const customServers = await loadCustomMcpServers();
+  const allMcpServers = [...(clientMcpServers ?? []), ...customServers, ...dbMcpServers];
 
   // Load custom MCP servers (UI-registered + DB-connected)
   if (Array.isArray(allMcpServers)) {

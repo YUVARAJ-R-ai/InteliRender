@@ -2,7 +2,7 @@ import { useState, useMemo, memo } from 'react';
 import { ChatMessage } from '@/types/widget';
 import { WidgetRenderer } from '@/components/widgets/WidgetRenderer';
 import { HtmlCanvas } from '@/components/widgets/HtmlCanvas';
-import { Trash2, Copy, Check, ThumbsUp, ThumbsDown, RotateCw, Download } from 'lucide-react';
+import { Trash2, Copy, Check, ThumbsUp, ThumbsDown, RotateCw, Download, ChevronDown, Wrench, Loader2 } from 'lucide-react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -27,6 +27,7 @@ export const MessageBubble = memo(function MessageBubble({
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   // Stable reference — prevents widget components with params-dependent hooks
   // (e.g. recharts internals) from re-triggering on every parent re-render,
@@ -150,11 +151,11 @@ export const MessageBubble = memo(function MessageBubble({
           className={`text-[#E8EDF2] leading-[1.6] transition-all duration-150 ${
             isUser
               ? `bg-[#2D2F33] p-[0.625rem_1rem] ${userBorderRadiusClass} border-0 shadow-none`
-              : 'bg-transparent border-0 shadow-none pl-[2.5rem] w-full'
+              : 'bg-transparent border-0 shadow-none pl-[2.5rem] w-full flex flex-col'
           }`}
           style={{ fontSize: 'var(--ir-font-size)' }}
         >
-          <div className="prose prose-invert max-w-none w-full">
+          <div className="prose prose-invert max-w-none w-full order-2">
             {message.content ? (
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -238,9 +239,26 @@ export const MessageBubble = memo(function MessageBubble({
               ) : null}
             </div>
   
-            {/* Tool Invocations Display */}
+            {/* Tool calls — collapsible, rendered above the answer (order-1) */}
             {message.toolInvocations && message.toolInvocations.length > 0 && (
-              <div className="flex flex-col gap-2 my-4 w-full">
+              <div className="order-1 w-full my-3">
+                <button
+                  type="button"
+                  onClick={() => setToolsOpen(o => !o)}
+                  className="flex items-center gap-2 text-xs font-medium text-[#A5A299] hover:text-[#E8EDF2] transition-colors py-1"
+                >
+                  {message.toolInvocations.some((t: any) => t.state === 'call')
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#8AB4F8]" />
+                    : <Wrench className="w-3.5 h-3.5 text-[#8AB4F8]" />}
+                  <span>
+                    {message.toolInvocations.some((t: any) => t.state === 'call')
+                      ? 'Working…'
+                      : `Used ${message.toolInvocations.length} tool${message.toolInvocations.length > 1 ? 's' : ''}`}
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 ml-0.5 transition-transform duration-200 ${toolsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {toolsOpen && (
+                <div className="flex flex-col gap-2 mt-2 w-full">
                 {message.toolInvocations.map((ti: any) => {
                   const isCall = ti.state === 'call';
                   const isThink = ti.toolName === 'think';
@@ -350,19 +368,21 @@ export const MessageBubble = memo(function MessageBubble({
   
                   return null;
                 })}
+                </div>
+                )}
               </div>
             )}
-            
+
             {/* Widget rendering — reclaim the 2.5rem avatar gutter so the widget is
                 centered across the full chat column instead of inset to the left.
                 Persisted HTML uses the SAME HtmlCanvas as the live render so a reload
                 looks identical (fixed-height, internally scrollable — never cropped). */}
             {message.widgetHtml ? (
-              <div className={`w-[calc(100%+2.5rem)] -ml-[2.5rem] overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
+              <div className={`order-3 w-[calc(100%+2.5rem)] -ml-[2.5rem] overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
                 <HtmlCanvas params={{ html: message.widgetHtml }} />
               </div>
             ) : widgetToRender ? (
-              <div className={`w-[calc(100%+2.5rem)] -ml-[2.5rem] overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
+              <div className={`order-3 w-[calc(100%+2.5rem)] -ml-[2.5rem] overflow-hidden ${message.content ? 'mt-6 pt-6 border-t border-white/5' : ''}`}>
                 <WidgetRenderer widget={widgetToRender as any} />
               </div>
             ) : null}

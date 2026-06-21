@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 import { SettingsProvider } from "@/lib/settings-context";
+import { SettingsUIProvider } from "@/lib/settings-ui-context";
 
 export const metadata: Metadata = {
   title: "Visual Response Engine",
@@ -29,9 +30,11 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col items-center" suppressHydrationWarning>
         <SessionProvider>
           <SettingsProvider>
-            <main className="flex-1 w-full h-full flex flex-col">
-              {children}
-            </main>
+            <SettingsUIProvider>
+              <main className="flex-1 w-full h-full flex flex-col">
+                {children}
+              </main>
+            </SettingsUIProvider>
           </SettingsProvider>
         </SessionProvider>
       </body>

@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const error = searchParams.get('error');
 
   const returnUrl = new URL('/', req.url);
-  returnUrl.searchParams.set('settings', 'Integrations');
+  returnUrl.searchParams.set('settings', 'Connectors');
 
   if (error) {
     returnUrl.searchParams.set('error', 'google_forms_denied');

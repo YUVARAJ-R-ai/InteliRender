@@ -98,12 +98,11 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
   // stale-closure chat-switching bug.
   const agentTransport = useMemo(() => new DefaultChatTransport({
     api: '/api/chat/agent',
+    // Custom MCP servers are now loaded server-side from the DB (admin panel),
+    // so the client no longer passes them in the request body.
     body: () => ({
       chatId: chatIdRef.current,
       model: selectedModelRef.current,
-      mcpServers: typeof window !== 'undefined'
-        ? JSON.parse(localStorage.getItem('mcp_servers') || '[]').filter((s: any) => s.isEnabled)
-        : []
     }),
     fetch: async (url, init) => {
       // Capture session BEFORE the await so we can detect navigation-away.
@@ -384,13 +383,11 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
     setSelectedMentionIdx(0);
   }, [input]);
 
-  // Get active list of filtered mentions
+  // Get active list of filtered mentions. Custom MCP servers are now managed in
+  // the admin panel and auto-loaded server-side, so the mention list only offers
+  // built-in skills.
   const getFilteredMentions = () => {
     if (!mentionState) return [];
-    
-    const mcpServers = typeof window !== 'undefined'
-      ? JSON.parse(localStorage.getItem('mcp_servers') || '[]').filter((s: any) => s.isEnabled)
-      : [];
 
     const builtins = BUILTIN_SKILLS.map(skill => ({
       name: skill.trigger,
@@ -400,16 +397,7 @@ export function ChatWindow({ chatId, onChatCreated, onMenuClick }: ChatWindowPro
       template: skill.template
     }));
 
-    const mcps = mcpServers.map((server: any) => ({
-      name: server.name,
-      displayName: `@${server.name}`,
-      description: `Active MCP: ${server.command} ${server.args.join(' ')}`,
-      isSkill: false,
-      template: `@${server.name} `
-    }));
-
-    const allOptions = [...builtins, ...mcps];
-    return allOptions.filter(opt => opt.name.toLowerCase().includes(mentionState.query));
+    return builtins.filter(opt => opt.name.toLowerCase().includes(mentionState.query));
   };
 
   const filteredMentions = getFilteredMentions();

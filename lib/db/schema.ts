@@ -122,3 +122,17 @@ export const appConfig = pgTable('app_config', {
   encryptedValue: text('encrypted_value').notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+// ── Custom MCP servers — admin-managed stdio server configs ───────────────────
+// Replaces the per-browser localStorage list. These are app-level: every Agent
+// Loop session loads the enabled ones as stdio child processes. userId records
+// who created the entry (nullable for seeded/global defaults).
+export const customMcpServers = pgTable('custom_mcp_servers', {
+  id: serial('id').primaryKey(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  name: text('name').notNull(),
+  command: text('command').notNull(),
+  args: jsonb('args').$type<string[]>().notNull().default([]),
+  isEnabled: boolean('is_enabled').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
