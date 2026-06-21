@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Monitor, Sun, Moon, Type, LayoutGrid, Zap, Key, Plug, Eye, EyeOff, CheckCircle, Circle, Loader2, Trash2, GitBranch, FileText, Layers, ClipboardList, Upload, ShieldCheck, Mail, HardDrive, Calendar, CreditCard, Database, MessageSquare } from 'lucide-react';
 import { useSettings } from '@/lib/settings-context';
+import { ConnectorsSection } from '@/components/connectors/ConnectorsSection';
 
 const ACCENT_SWATCHES = [
   { color: '#8AB4F8', label: 'Blue'    },
@@ -17,12 +18,13 @@ const ACCENT_SWATCHES = [
 
 const MODELS = ['DeepSeek-V4-Flash', 'DeepSeek-R1', 'Claude 3.5 Sonnet', 'GPT-4o'];
 
-export type Section = 'Appearance' | 'Workspace' | 'Behavior';
+export type Section = 'Appearance' | 'Workspace' | 'Behavior' | 'Connectors';
 
 const NAV: { label: Section; icon: React.ComponentType<any> }[] = [
   { label: 'Appearance',   icon: Monitor    },
   { label: 'Workspace',    icon: LayoutGrid },
   { label: 'Behavior',     icon: Zap        },
+  { label: 'Connectors',   icon: Plug       },
 ];
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -492,9 +494,10 @@ export function IntegrationsSection({ oauthResult, showGoogleOAuth = true }: { o
   );
 }
 
-export function SettingsModal({ onClose, initialSection }: {
+export function SettingsModal({ onClose, initialSection, oauthResult }: {
   onClose: () => void;
   initialSection?: Section;
+  oauthResult?: { connected?: string; error?: string };
 }) {
   const [section, setSection] = useState<Section>(initialSection ?? 'Appearance');
   const { settings, set } = useSettings();
@@ -513,7 +516,7 @@ export function SettingsModal({ onClose, initialSection }: {
       className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4 ir-fade-in"
       onMouseDown={(e) => { if (e.target === backdropRef.current) onClose(); }}
     >
-      <div className="ir-fade-slide-up bg-[#1a1a1a] border border-[#2e2e2e] rounded-2xl w-full max-w-[660px] max-h-[80vh] flex overflow-hidden shadow-2xl">
+      <div className="ir-fade-slide-up bg-[#1a1a1a] border border-[#2e2e2e] rounded-2xl w-full max-w-[940px] h-[86vh] max-h-[680px] flex overflow-hidden shadow-2xl">
 
         {/* Left nav */}
         <div className="w-[168px] shrink-0 border-r border-[#242424] flex flex-col bg-[#141414]">
@@ -633,6 +636,10 @@ export function SettingsModal({ onClose, initialSection }: {
                   <Toggle value={settings.showTokenCount} onChange={v => set('showTokenCount', v)} />
                 </Row>
               </div>
+            )}
+
+            {section === 'Connectors' && (
+              <ConnectorsSection oauthResult={oauthResult} />
             )}
 
           </div>

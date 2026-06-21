@@ -6,18 +6,17 @@ import {
   Settings, LogOut, User, Sparkles, ChevronRight,
   HelpCircle, Palette, Crown,
 } from 'lucide-react';
-import { SettingsModal, Section } from './SettingsModal';
+import type { Section } from './SettingsModal';
+import { useSettingsUI } from '@/lib/settings-ui-context';
 
 export function UserMenu() {
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<Section>('Appearance');
+  const { openSettings: openSettingsOverlay } = useSettingsUI();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const openSettings = (section: Section) => {
-    setSettingsSection(section);
-    setShowSettings(true);
+    openSettingsOverlay(section);
     setOpen(false);
   };
 
@@ -36,10 +35,7 @@ export function UserMenu() {
   // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        setShowSettings(false);
-      }
+      if (e.key === 'Escape') setOpen(false);
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
@@ -163,8 +159,6 @@ export function UserMenu() {
           </div>
         )}
       </div>
-
-      {showSettings && <SettingsModal initialSection={settingsSection} onClose={() => setShowSettings(false)} />}
     </>
   );
 }
