@@ -210,7 +210,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const accessToken = await getAccessToken();
     const result = await tool.handler(request.params.arguments ?? {}, accessToken);
-    return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result };
+    // MCP requires structuredContent to be an object (record); list/search tools
+    // return arrays, so wrap those. The text content keeps the raw result.
+    const structuredContent = Array.isArray(result) ? { results: result } : result;
+    return { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { content: [{ type: 'text', text: JSON.stringify({ error: message }) }], structuredContent: { error: message }, isError: true };
