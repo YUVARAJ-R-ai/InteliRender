@@ -9,8 +9,10 @@ behaviour is unchanged: browser_task uses one Chromium session at a time with a
 are never sent back to the model context — matching the old agent route).
 """
 import asyncio
+import base64
 import os
 import re
+import uuid
 from typing import Any, Optional
 
 import httpx
@@ -20,6 +22,33 @@ from main import mcp
 # One concurrent browser session at a time (prevents resource exhaustion)
 _browser_semaphore = asyncio.Semaphore(1)
 _BROWSER_TIMEOUT_SECONDS = 60
+
+# Screenshots are stashed in redis under a random id with a TTL and surfaced to
+# the chat via a short URL (/api/screenshots/<id>). The base64 PNG never enters
+# the model's text context — only the tiny URL does.
+_SCREENSHOT_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
+
+
+async def _store_screenshot(png_bytes: bytes) -> Optional[str]:
+    """Store a PNG in redis under a random id; return /api/screenshots/<id>.
+
+    Returns None when REDIS_URL is unset or redis is unavailable, so the caller
+    can gracefully degrade to has_screenshot only.
+    """
+    redis_url = os.environ.get("REDIS_URL")
+    if not redis_url:
+        return None
+    try:
+        import redis.asyncio as redis  # redis>=4.2 ships asyncio support
+
+        client = redis.from_url(redis_url)
+        screenshot_id = uuid.uuid4().hex
+        encoded = base64.b64encode(png_bytes).decode("ascii")
+        await client.set(f"screenshot:{screenshot_id}", encoded, ex=_SCREENSHOT_TTL_SECONDS)
+        await client.aclose()
+        return f"/api/screenshots/{screenshot_id}"
+    except Exception:
+        return None
 
 
 @mcp.tool()
@@ -157,10 +186,15 @@ async def _run_browser(url: str, steps: list[dict[str, Any]], credentials: Optio
             body_text = await page.inner_text("body")
             result_lines.append(body_text[:2000])
 
-        # A screenshot is always captured (matching the old FastAPI service), but the
-        # bytes are intentionally discarded — only the boolean reaches the model.
-        await page.screenshot(type="png")
+        # Capture the screenshot and stash it in redis; the chat renders it from
+        # the returned short URL. Falls back to has_screenshot only if redis is
+        # unavailable — the bytes never reach the model context either way.
+        png_bytes = await page.screenshot(type="png")
+        screenshot_url = await _store_screenshot(png_bytes)
 
         await browser.close()
 
-        return {"result": "\n".join(result_lines), "has_screenshot": True}
+        result = {"result": "\n".join(result_lines), "has_screenshot": True}
+        if screenshot_url:
+            result["screenshotUrl"] = screenshot_url
+        return result
