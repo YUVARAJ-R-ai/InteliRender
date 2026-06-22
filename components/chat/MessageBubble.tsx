@@ -265,7 +265,8 @@ export const MessageBubble = memo(function MessageBubble({
                   const isSearch = ti.toolName === 'web_search';
                   const isWidget = ti.toolName === 'render_widget';
                   const isCsv = ti.toolName === 'generate_csv';
-                  const isCustomMcp = !isThink && !isSearch && !isWidget && !isCsv;
+                  const isBrowser = ti.toolName === 'browser_task';
+                  const isCustomMcp = !isThink && !isSearch && !isWidget && !isCsv && !isBrowser;
   
                   if (isThink) {
                     return (
@@ -339,6 +340,34 @@ export const MessageBubble = memo(function MessageBubble({
                               <span className="text-[#8AB4F8]/60 text-xs">· {rows} rows</span>
                             )}
                           </a>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (isBrowser) {
+                    // screenshotUrl lives under structuredContent on the live MCP
+                    // result and at the top level on the saved/reloaded shape.
+                    const data = ti.result?.structuredContent ?? ti.result;
+                    const shotUrl = data?.screenshotUrl;
+                    return (
+                      <div key={ti.toolCallId} className="bg-[#1F2226] border border-white/5 rounded-xl p-3 flex flex-col gap-2.5 w-full">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-[#8AB4F8]">
+                          <div className={`w-1.5 h-1.5 rounded-full ${isCall ? 'bg-indigo-400 animate-pulse' : 'bg-emerald-400'}`} />
+                          <span>{isCall ? 'Browsing the web...' : 'Browser task complete'}</span>
+                        </div>
+                        {!isCall && shotUrl && (
+                          <img
+                            src={shotUrl}
+                            alt="Browser screenshot"
+                            className="rounded-lg border border-white/10 max-w-full w-full object-contain"
+                            loading="lazy"
+                          />
+                        )}
+                        {!isCall && data?.result && (
+                          <p className="text-[11px] text-[#A5A299] leading-relaxed line-clamp-3 whitespace-pre-wrap">
+                            {data.result}
+                          </p>
                         )}
                       </div>
                     );
