@@ -25,8 +25,9 @@ export function sanitizeToolResult(toolName: string, result: any): any {
   const data = result.structuredContent ?? result;
 
   if (toolName === 'browser_task') {
-    // Strip screenshot (base64) — only keep the text result
-    return { result: data.result, has_screenshot: data.has_screenshot };
+    // Strip the screenshot bytes but KEEP the tiny screenshotUrl so the image
+    // still renders from history/after reload — the base64 never reaches the model.
+    return { result: data.result, has_screenshot: data.has_screenshot, screenshotUrl: data.screenshotUrl };
   }
 
   if (toolName === 'fetch_url' && data?.text) {
