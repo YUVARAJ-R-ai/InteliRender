@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Monitor, Sun, Moon, Type, LayoutGrid, Zap, Key, Plug, Eye, EyeOff, CheckCircle, Circle, Loader2, Trash2, GitBranch, FileText, Layers, Upload, ShieldCheck, Mail, HardDrive, Calendar, CreditCard, Database, MessageSquare } from 'lucide-react';
+import { X, Monitor, Sun, Moon, Type, LayoutGrid, Zap, Key, Plug, Eye, EyeOff, CheckCircle, Circle, Loader2, Trash2, GitBranch, FileText, Layers, ClipboardList, Upload, ShieldCheck, Mail, HardDrive, Calendar, CreditCard, Database, MessageSquare, ChevronLeft } from 'lucide-react';
 import { useSettings } from '@/lib/settings-context';
+import { ConnectorsSection } from '@/components/connectors/ConnectorsSection';
 
 const ACCENT_SWATCHES = [
   { color: '#8AB4F8', label: 'Blue'    },
@@ -17,12 +18,13 @@ const ACCENT_SWATCHES = [
 
 const MODELS = ['DeepSeek-V4-Flash', 'DeepSeek-R1', 'Claude 3.5 Sonnet', 'GPT-4o'];
 
-export type Section = 'Appearance' | 'Workspace' | 'Behavior';
+export type Section = 'Appearance' | 'Workspace' | 'Behavior' | 'Connectors';
 
 const NAV: { label: Section; icon: React.ComponentType<any> }[] = [
   { label: 'Appearance',   icon: Monitor    },
   { label: 'Workspace',    icon: LayoutGrid },
   { label: 'Behavior',     icon: Zap        },
+  { label: 'Connectors',   icon: Plug       },
 ];
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -211,7 +213,7 @@ export function ApiKeysSection() {
 
 // ── Google OAuth app credentials card ────────────────────────────────────────
 
-function GoogleOAuthCard() {
+export function GoogleOAuthCard() {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -316,6 +318,14 @@ type IntegrationDef =
 const INTEGRATION_DEFS: IntegrationDef[] = [
   // ── Google services (OAuth) ──
   {
+    service: 'google_forms',
+    label: 'Google Forms',
+    icon: ClipboardList,
+    description: 'Create & manage forms in your own Google account.',
+    authType: 'oauth',
+    oauthPath: '/api/auth/google-forms',
+  },
+  {
     service: 'gmail',
     label: 'Gmail',
     icon: Mail,
@@ -349,7 +359,7 @@ const INTEGRATION_DEFS: IntegrationDef[] = [
   { service: 'slack',    label: 'Slack',    icon: MessageSquare, description: 'Read channels, send messages, search',        authType: 'pat', placeholder: 'xoxb-...', hint: 'Create a Bot token at api.slack.com/apps → OAuth & Permissions. Also paste your Team ID (Settings tab) in the field below.' },
 ];
 
-export function IntegrationsSection({ oauthResult }: { oauthResult?: { connected?: string; error?: string } }) {
+export function IntegrationsSection({ oauthResult, showGoogleOAuth = true }: { oauthResult?: { connected?: string; error?: string }; showGoogleOAuth?: boolean }) {
   const [connections, setConnections] = useState<Record<string, { status: string; lastSynced: string | null }>>({});
   const [tokenInputs, setTokenInputs] = useState<Record<string, string>>({});
   const [connecting, setConnecting] = useState<Record<string, boolean>>({});
@@ -389,12 +399,19 @@ export function IntegrationsSection({ oauthResult }: { oauthResult?: { connected
 
   return (
     <div className="space-y-3 pb-2">
-      {oauthResult?.error && (
-        <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-[11px] text-red-400">
-          Connection failed. Please try again.
+      {oauthResult?.connected === 'google_forms' && (
+        <div className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-[11px] text-emerald-400">
+          Google Forms connected successfully.
         </div>
       )}
-      <GoogleOAuthCard />
+      {oauthResult?.error && (
+        <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-[11px] text-red-400">
+          {oauthResult.error === 'google_forms_denied' && 'Authorization was cancelled.'}
+          {oauthResult.error === 'google_forms_no_refresh' && 'No refresh token received. Revoke app access in your Google account settings and try again.'}
+          {!['google_forms_denied', 'google_forms_no_refresh'].includes(oauthResult.error) && 'Connection failed. Please try again.'}
+        </div>
+      )}
+      {showGoogleOAuth && <GoogleOAuthCard />}
       <p className="text-[11px] text-[#6B7280] leading-relaxed">
         Connected services are automatically available as tools in Agent Loop mode — no manual MCP registration needed.
       </p>
@@ -477,13 +494,25 @@ export function IntegrationsSection({ oauthResult }: { oauthResult?: { connected
   );
 }
 
-export function SettingsModal({ onClose, initialSection }: {
+export function SettingsModal({ onClose, initialSection, oauthResult }: {
   onClose: () => void;
   initialSection?: Section;
+  oauthResult?: { connected?: string; error?: string };
 }) {
   const [section, setSection] = useState<Section>(initialSection ?? 'Appearance');
+  // The last non-Connectors section, so the Connectors "back" button can return
+  // to where the user came from.
+  const [lastNav, setLastNav] = useState<Section>(
+    initialSection && initialSection !== 'Connectors' ? initialSection : 'Appearance',
+  );
   const { settings, set } = useSettings();
   const backdropRef = useRef<HTMLDivElement>(null);
+
+  const isConnectors = section === 'Connectors';
+  const goTo = (s: Section) => {
+    if (s !== 'Connectors') setLastNav(s);
+    setSection(s);
+  };
 
   // Escape to close
   useEffect(() => {
@@ -498,41 +527,56 @@ export function SettingsModal({ onClose, initialSection }: {
       className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4 ir-fade-in"
       onMouseDown={(e) => { if (e.target === backdropRef.current) onClose(); }}
     >
-      <div className="ir-fade-slide-up bg-[#1a1a1a] border border-[#2e2e2e] rounded-2xl w-full max-w-[660px] max-h-[80vh] flex overflow-hidden shadow-2xl">
+      <div className="ir-fade-slide-up bg-[#1a1a1a] border border-[#2e2e2e] rounded-2xl w-full max-w-[940px] h-[86vh] max-h-[680px] flex overflow-hidden shadow-2xl">
 
-        {/* Left nav */}
-        <div className="w-[168px] shrink-0 border-r border-[#242424] flex flex-col bg-[#141414]">
-          <div className="px-4 pt-5 pb-3">
-            <h2 className="text-[13px] font-semibold text-[#E8EDF2]">Settings</h2>
+        {/* Left nav — collapses out when Connectors takes over the overlay */}
+        <div className={`shrink-0 overflow-hidden transition-[width,opacity] duration-300 ease-out ${isConnectors ? 'w-0 opacity-0' : 'w-[168px] opacity-100'}`}>
+          <div className="w-[168px] h-full border-r border-[#242424] flex flex-col bg-[#141414]">
+            <div className="px-4 pt-5 pb-3">
+              <h2 className="text-[13px] font-semibold text-[#E8EDF2]">Settings</h2>
+            </div>
+            <nav className="flex-1 px-2 space-y-0.5">
+              {NAV.map(({ label, icon: Icon }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => goTo(label)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-left transition-colors duration-150 ${
+                    section === label
+                      ? 'bg-[#2a2a2a] text-[#E8EDF2]'
+                      : 'text-[#6B7280] hover:text-[#9CA3AF] hover:bg-[#1e1e1e]'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  {label}
+                </button>
+              ))}
+            </nav>
+            <div className="px-4 pb-4 text-[10px] text-[#4B5563]">IntelliRender v0.1</div>
           </div>
-          <nav className="flex-1 px-2 space-y-0.5">
-            {NAV.map(({ label, icon: Icon }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setSection(label)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-left transition-colors duration-150 ${
-                  section === label
-                    ? 'bg-[#2a2a2a] text-[#E8EDF2]'
-                    : 'text-[#6B7280] hover:text-[#9CA3AF] hover:bg-[#1e1e1e]'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5 shrink-0" />
-                {label}
-              </button>
-            ))}
-          </nav>
-          <div className="px-4 pb-4 text-[10px] text-[#4B5563]">IntelliRender v0.1</div>
         </div>
 
         {/* Right content */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-[#242424] shrink-0">
-            <h3 className="text-[14px] font-semibold text-[#E8EDF2]">{section}</h3>
+            <div className="flex items-center gap-2 min-w-0">
+              {isConnectors && (
+                <button
+                  type="button"
+                  onClick={() => setSection(lastNav)}
+                  className="flex items-center gap-1 text-[12px] text-[#6B7280] hover:text-[#E8EDF2] -ml-1 pr-1 py-1 rounded-lg hover:bg-[#242424] transition-colors shrink-0"
+                  title="Back to settings"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Settings
+                </button>
+              )}
+              <h3 className="text-[14px] font-semibold text-[#E8EDF2] truncate">{section}</h3>
+            </div>
             <button
               type="button"
               onClick={onClose}
-              className="text-[#4B5563] hover:text-[#9CA3AF] p-1 rounded-lg hover:bg-[#242424] transition-colors"
+              className="text-[#4B5563] hover:text-[#9CA3AF] p-1 rounded-lg hover:bg-[#242424] transition-colors shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -617,6 +661,12 @@ export function SettingsModal({ onClose, initialSection }: {
                 <Row label="Show token count" description="Display input/output token usage below each response.">
                   <Toggle value={settings.showTokenCount} onChange={v => set('showTokenCount', v)} />
                 </Row>
+              </div>
+            )}
+
+            {section === 'Connectors' && (
+              <div className="ir-fade-in">
+                <ConnectorsSection oauthResult={oauthResult} />
               </div>
             )}
 

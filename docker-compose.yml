@@ -18,23 +18,17 @@ services:
       - app_network
     restart: unless-stopped
 
-  api:
-    build: ./services/api
-    container_name: intellirender_api
-    environment:
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-      - NEXTJS_URL=http://frontend:3000
-    depends_on:
-      - db
-    networks:
-      - app_network
-    restart: unless-stopped
-
   mcp-server:
     build: ./services/mcp-server
     container_name: intellirender_mcp_server
     ports:
       - "8001:8001"
+    environment:
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - EXA_API_KEY=${EXA_API_KEY:-}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      - redis
     networks:
       - app_network
     restart: unless-stopped
@@ -48,23 +42,16 @@ services:
       - "3000:3000"
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/intellirender}
-      - FASTAPI_URL=http://api:8000
       - MCP_SERVER_URL=http://mcp-server:8001/mcp
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
     depends_on:
       - db
-      - api
       - mcp-server
-    networks:
-      - app_network
-    restart: unless-stopped
-
-  playwright:
-    image: mcr.microsoft.com/playwright:v1.50.0-noble
-    container_name: intellirender_playwright
-    command: ["sleep", "infinity"]
+      - redis
     networks:
       - app_network
     restart: unless-stopped
