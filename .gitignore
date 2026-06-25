@@ -43,3 +43,6 @@ next-env.d.ts
 # python
 __pycache__/
 *.pyc
+
+#docs
+/docs/internship_review
